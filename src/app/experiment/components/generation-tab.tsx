@@ -14,8 +14,8 @@ import { useTextSplittingStore } from "@/app/stores/experiment/text-splitting-st
 import { SYSTEM_PROMPT_TEMPLATE, USER_PROMPT_TEMPLATE } from "@/app/experiment/constants/prompt-templates";
 import { useChat } from "ai/react";
 import { MessageDisplay } from "./message-display";
-import { useState } from "react";
-import { HelpCircle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, Circle, HelpCircle, ListChecks } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -23,6 +23,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+
+/** Viewport-aware height so prompt preview and model response need less inner scrolling. */
+const GENERATION_SPLIT_HEIGHT_CLASS =
+  "h-[max(38rem,min(56rem,calc(100vh-12.5rem)))]";
 
 export function GenerationTab() {
   const { blocks, strategy } = useTextSplittingStore();
@@ -30,7 +35,7 @@ export function GenerationTab() {
   const { messages, append, isLoading, setMessages} = useChat();
   
   // For parent-child strategy, use parent chunks as context (deduplicated)
-  const topSimilarBlocks = (() => {
+  const topSimilarBlocks = useMemo(() => {
     if (strategy === "parent-child") {
       const topSimilarities = similarities.slice(0, 3);
       const parentChunksMap = new Map<number, string>();
@@ -38,7 +43,7 @@ export function GenerationTab() {
       // Collect parent chunks in order of first appearance
       topSimilarities.forEach(({ index }) => {
         const block = blocks[index];
-        if (block.parentId !== undefined && block.parentText) {
+        if (block?.parentId !== undefined && block.parentText) {
           if (!parentChunksMap.has(block.parentId)) {
             parentChunksMap.set(block.parentId, block.parentText);
           }
@@ -46,17 +51,48 @@ export function GenerationTab() {
       });
       
       return Array.from(parentChunksMap.values());
-    } else {
-      return similarities
-        .slice(0, 3)
-        .map(({ index }) => blocks[index].text);
     }
-  })();
+
+    return similarities
+      .slice(0, 3)
+      .map(({ index }) => blocks[index]?.text)
+      .filter((text): text is string => Boolean(text));
+  }, [blocks, similarities, strategy]);
   
   const [systemMessage, setSystemMessage] = useState(SYSTEM_PROMPT_TEMPLATE(topSimilarBlocks.join("\n\n")));
   const [userMessage, setUserMessage] = useState(USER_PROMPT_TEMPLATE(question || ""));
   const [temperature, setTemperature] = useState(0.3);
   const [maxTokens, setMaxTokens] = useState(1000);
+  const hasGeneratedAnswer = messages.length > 1;
+  const hasGenerationInput = topSimilarBlocks.length > 0 && Boolean(question);
+  const thinkingSteps = [
+    {
+      label: `Collected ${topSimilarBlocks.length} retrieved context chunk${
+        topSimilarBlocks.length === 1 ? "" : "s"
+      }`,
+      isComplete: hasGenerationInput,
+    },
+    {
+      label: "Composed system instructions and user question",
+      isComplete: hasGenerationInput,
+    },
+    {
+      label: hasGeneratedAnswer
+        ? "Generated a grounded response"
+        : isLoading
+          ? "Generating a grounded response"
+          : "Ready to generate a grounded response",
+      isComplete: hasGeneratedAnswer,
+    },
+  ];
+
+  useEffect(() => {
+    setSystemMessage(SYSTEM_PROMPT_TEMPLATE(topSimilarBlocks.join("\n\n")));
+  }, [topSimilarBlocks]);
+
+  useEffect(() => {
+    setUserMessage(USER_PROMPT_TEMPLATE(question || ""));
+  }, [question]);
 
   const handleGenerate = async () => {
     if (!topSimilarBlocks.length || !question) return;
@@ -75,14 +111,14 @@ export function GenerationTab() {
     });
   };
 
-  const isDisabled = !topSimilarBlocks.length || !question || isLoading;
+  const isDisabled = !hasGenerationInput || isLoading;
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle>Response Generation</CardTitle>
+            <CardTitle>Context Generation</CardTitle>
             <CardDescription>
               Observe how LLMs combine retrieved context with user queries to generate accurate, contextual responses
               {strategy === "parent-child" && topSimilarBlocks.length > 0 && (
@@ -113,7 +149,7 @@ export function GenerationTab() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-center space-x-4">
+        <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center">
             <label className="text-sm font-medium flex items-center gap-2">
               Temperature:
@@ -183,11 +219,16 @@ export function GenerationTab() {
           </div>
         </div>
         
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {/* Prompt Preview Section */}
           <section className="space-y-2" aria-label="Prompt Preview Section">
             <label className="text-sm font-medium">Prompt Preview:</label>
-            <div className="h-[600px] rounded-lg border-2 border-dashed border-muted-foreground/25">
+            <div
+              className={cn(
+                GENERATION_SPLIT_HEIGHT_CLASS,
+                "rounded-lg border-2 border-dashed border-muted-foreground/25"
+              )}
+            >
               <ScrollArea className="h-full p-4">
                 {topSimilarBlocks.length > 0 && question ? (
                   <div className="space-y-4">
@@ -214,7 +255,7 @@ export function GenerationTab() {
                   </div>
                 ) : (
                   <div className="flex items-center justify-center h-full text-muted-foreground">
-                    Start by asking a question in the Vector Embedding tab
+                    Start by asking a question in the Semantic Search tab
                   </div>
                 )}
               </ScrollArea>
@@ -224,23 +265,84 @@ export function GenerationTab() {
           {/* Generated Answer Section */}
           <section className="space-y-2" aria-label="Generated Answer Section">
             <label className="text-sm font-medium">Model Response:</label>
-            <div className="h-[600px] rounded-lg border-2 border-dashed border-muted-foreground/25">
-              <ScrollArea className="p-4 h-full">
-                {messages.length > 0 ? (
-                  <div className="flex flex-col gap-4">
-                    {messages.length > 1 && (
-                      <MessageDisplay
-                        key={messages[messages.length - 1].id}
-                        message={messages[messages.length - 1].content}
-                      />
+            <div
+              className={cn(
+                GENERATION_SPLIT_HEIGHT_CLASS,
+                "flex flex-col gap-4"
+              )}
+            >
+              <div className="rounded-lg border-2 border-dashed border-muted-foreground/25 p-4">
+                <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                  <ListChecks
+                    className="h-4 w-4 text-muted-foreground"
+                    aria-hidden
+                  />
+                  <span>Generation pipeline</span>
+                </div>
+                {hasGenerationInput ? (
+                  <div className="space-y-3">
+                    {thinkingSteps.map((step) => {
+                      const Icon = step.isComplete ? CheckCircle2 : Circle;
+
+                      return (
+                        <div
+                          key={step.label}
+                          className="flex items-start gap-2 text-sm"
+                        >
+                          <Icon
+                            className={
+                              step.isComplete
+                                ? "mt-0.5 h-4 w-4 text-green-600"
+                                : "mt-0.5 h-4 w-4 text-muted-foreground"
+                            }
+                          />
+                          {isLoading && !step.isComplete ? (
+                            <span className="font-medium">{step.label}</span>
+                          ) : (
+                            <span
+                              className={
+                                step.isComplete
+                                  ? "text-foreground"
+                                  : "text-muted-foreground"
+                              }
+                            >
+                              {step.label}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {isLoading && (
+                      <p className="pl-6 text-xs text-muted-foreground">
+                        Streaming tokens from the model...
+                      </p>
                     )}
                   </div>
                 ) : (
                   <div className="flex items-center justify-center text-muted-foreground">
-                    Click &quot;Generate Response&quot; to see the model&apos;s answer
+                    Run semantic search first to prepare generation context
                   </div>
                 )}
-              </ScrollArea>
+              </div>
+              <div className="min-h-0 flex-1 rounded-lg border-2 border-dashed border-muted-foreground/25">
+                <ScrollArea className="p-4 h-full">
+                  {messages.length > 0 ? (
+                    <div className="flex flex-col gap-4">
+                      {hasGeneratedAnswer && (
+                        <MessageDisplay
+                          key={messages[messages.length - 1].id}
+                          message={messages[messages.length - 1].content}
+                          isStreaming={isLoading}
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-muted-foreground">
+                      Click &quot;Generate Response&quot; to see the model&apos;s answer
+                    </div>
+                  )}
+                </ScrollArea>
+              </div>
             </div>
           </section>
         </div>

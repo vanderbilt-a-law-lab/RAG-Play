@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { Header } from "@/app/components/header"
 import { Footer } from "@/app/components/footer"
 import { ExperimentContent } from "./components/experiment-content"
@@ -14,7 +15,9 @@ export default function ExperimentPage() {
               Explore each step of the RAG pipeline through interactive visualizations
             </p>
           </div>
-          <ExperimentContent />
+          <Suspense fallback={null}>
+            <ExperimentContent />
+          </Suspense>
         </div>
       </main>
       <Footer />

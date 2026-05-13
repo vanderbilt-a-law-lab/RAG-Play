@@ -44,6 +44,7 @@ interface EmbeddingState {
   setQuestion: (question: string) => void;
   setModel: (model: EmbeddingModel) => void;
   setWorker: (worker: Worker | null) => void;
+  clearSemanticSearch: () => void;
   recalculateSimilarities: () => void;
 }
 
@@ -61,6 +62,7 @@ export const useEmbeddingStore = create<EmbeddingState>((set, get) => ({
   setQuestion: (question) => set({ question }),
   setModel: (model) => set({ model }),
   setWorker: (worker) => set({ worker }),
+  clearSemanticSearch: () => set({ questionEmbedding: [], similarities: [] }),
   recalculateSimilarities: () => {
     const { questionEmbedding, blocksEmbedding } = get();
     const similarities = calculateSimilarities(

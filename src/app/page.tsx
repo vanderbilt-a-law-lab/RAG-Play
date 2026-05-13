@@ -31,7 +31,11 @@ const Arrow = () => (
 
 // FeatureCard component
 const FeatureCard = ({ feature }: { feature: (typeof features)[0] }) => (
-  <div className="group relative overflow-hidden rounded-2xl border bg-background h-[230px] p-6 transition-all hover:shadow-lg">
+  <Link
+    href={feature.href}
+    className="group relative block overflow-hidden rounded-2xl border bg-background h-[230px] p-6 transition-all hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    aria-label={`Open ${feature.title} experiment step`}
+  >
     <div className="absolute inset-0 -z-10 bg-gradient-to-b from-transparent to-primary/5 opacity-0 transition-opacity group-hover:opacity-100" />
     <div className="mb-4 inline-flex rounded-full bg-primary/10 p-3">
       {feature.icon}
@@ -40,7 +44,7 @@ const FeatureCard = ({ feature }: { feature: (typeof features)[0] }) => (
     <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-4">
       {feature.description}
     </p>
-  </div>
+  </Link>
 );
 
 const features = [
@@ -49,24 +53,28 @@ const features = [
     description:
       "Visualize how documents are split into meaningful chunks while preserving semantic coherence and context",
     icon: <SplitSquareHorizontal className="h-6 w-6 text-primary" />,
+    href: "/experiment?step=text-splitting",
   },
   {
     title: "Vector Embedding",
     description: 
       "See how text is transformed into numerical vectors and visualize their relationships in high-dimensional space",
     icon: <Boxes className="h-6 w-6 text-primary" />,
+    href: "/experiment?step=embedding",
   },
   {
     title: "Semantic Search",
     description: 
       "Experience real-time vector similarity search and understand how relevant context is retrieved from your knowledge base",
     icon: <Search className="h-6 w-6 text-primary" />,
+    href: "/experiment?step=semantic-search",
   },
   {
     title: "Context Generation",
     description: 
       "Watch how the LLM combines retrieved context with user queries to generate accurate, contextual responses",
     icon: <MessageSquare className="h-6 w-6 text-primary" />,
+    href: "/experiment?step=generation",
   },
 ];
 
@@ -105,12 +113,12 @@ export default function Home() {
         <section className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className="flex flex-col lg:flex-row items-center justify-center gap-6">
             {features.map((feature, index) => (
-              <>
+              <div key={feature.title} className="contents">
                 <div className="w-[280px] shrink-0">
                   <FeatureCard feature={feature} />
                 </div>
                 {index < features.length - 1 && <Arrow />}
-              </>
+              </div>
             ))}
           </div>
         </section>

@@ -16,7 +16,7 @@ interface UseEmbeddingWorkerProps {
   model: EmbeddingModel;
 }
 
-interface UseEmbeddingWorkerReturn {
+export interface UseEmbeddingWorkerReturn {
   loadingState: UILoadingState;
   fileProgresses: Map<string, UIFileProgress>;
   embeddingProgress: number;

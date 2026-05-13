@@ -3,9 +3,14 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { extractRedactedThinking } from "@/lib/extract-redacted-thinking";
 import markdownit from "markdown-it";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 const md = markdownit();
+
+/** Wrap markdown-it HTML so global `github-markdown-css` (scoped to `.markdown-body`) applies. */
+const MARKDOWN_HTML_CLASS = cn("markdown-body max-w-none");
 
 type MessageDisplayProps = {
   message: string;
@@ -14,6 +19,8 @@ type MessageDisplayProps = {
   onEdit?: (newMessage: string) => void;
   isEditable?: boolean;
   label?: string;
+  /** When true, the assistant reply is still streaming (`useChat` `isLoading`). Thinking header uses this plus parsed tags to pick labels. */
+  isStreaming?: boolean;
 };
 
 export const MessageDisplay = ({
@@ -23,11 +30,29 @@ export const MessageDisplay = ({
   onEdit,
   isEditable = false,
   label,
+  isStreaming = false,
 }: MessageDisplayProps) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editedMessage, setEditedMessage] = React.useState(message);
+  const [isThinkingExpanded, setIsThinkingExpanded] = React.useState(false);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const thinkingPanelId = React.useId();
+
+  const parsedThinking = React.useMemo(() => {
+    if (showOriginal || isEditing) {
+      return null;
+    }
+    return extractRedactedThinking(message);
+  }, [message, showOriginal, isEditing]);
+
+  /** True while the stream is open and the `<think>` block has not closed yet. */
+  const isThinkingBlockStreaming = React.useMemo(() => {
+    if (parsedThinking?.thinkingContent == null) {
+      return false;
+    }
+    return isStreaming && !parsedThinking.thinkingComplete;
+  }, [parsedThinking, isStreaming]);
 
   React.useEffect(() => {
     if (isEditing && textareaRef.current) {
@@ -70,6 +95,19 @@ export const MessageDisplay = ({
       handleSave();
     } else if (e.key === "Escape") {
       handleCancel();
+    }
+  };
+
+  const handleToggleThinking = () => {
+    setIsThinkingExpanded((prev) => !prev);
+  };
+
+  const handleToggleThinkingKeyDown = (
+    e: React.KeyboardEvent<HTMLButtonElement>
+  ) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleToggleThinking();
     }
   };
 
@@ -127,8 +165,70 @@ export const MessageDisplay = ({
           <div className="p-3">
             {showOriginal ? (
               <div className="whitespace-pre-wrap">{message}</div>
+            ) : parsedThinking?.thinkingContent != null ? (
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-medium text-foreground ring-offset-background transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  )}
+                  onClick={handleToggleThinking}
+                  onKeyDown={handleToggleThinkingKeyDown}
+                  aria-expanded={isThinkingExpanded}
+                  aria-controls={thinkingPanelId}
+                  aria-label={
+                    isThinkingBlockStreaming
+                      ? "Thinking in progress"
+                      : isThinkingExpanded
+                        ? "Hide thinking details"
+                        : "View thinking details"
+                  }
+                >
+                  {isThinkingExpanded ? (
+                    <ChevronDown
+                      className="h-4 w-4 shrink-0 text-muted-foreground"
+                      aria-hidden
+                    />
+                  ) : (
+                    <ChevronRight
+                      className="h-4 w-4 shrink-0 text-muted-foreground"
+                      aria-hidden
+                    />
+                  )}
+                  {isThinkingBlockStreaming ? (
+                    <span>Thinking...</span>
+                  ) : isThinkingExpanded ? (
+                    <span>Hide thinking details</span>
+                  ) : (
+                    <span>View thinking details</span>
+                  )}
+                </button>
+                {isThinkingExpanded ? (
+                  <div
+                    id={thinkingPanelId}
+                    className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm whitespace-pre-wrap text-muted-foreground"
+                  >
+                    {parsedThinking.thinkingContent.length > 0 ? (
+                      parsedThinking.thinkingContent
+                    ) : (
+                      <span className="italic">No thinking content yet</span>
+                    )}
+                  </div>
+                ) : null}
+                {parsedThinking.visibleMarkdown.trim().length > 0 ? (
+                  <div
+                    className={MARKDOWN_HTML_CLASS}
+                    dangerouslySetInnerHTML={{
+                      __html: md.render(parsedThinking.visibleMarkdown),
+                    }}
+                  />
+                ) : null}
+              </div>
             ) : (
-              <div dangerouslySetInnerHTML={{ __html: md.render(message) }} />
+              <div
+                className={MARKDOWN_HTML_CLASS}
+                dangerouslySetInnerHTML={{ __html: md.render(message) }}
+              />
             )}
           </div>
         )}
