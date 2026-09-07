@@ -31,6 +31,13 @@ export interface TextBlock {
   text: string;
 }
 
+/** Which corpus document a chunk was cut from, when that can be determined. */
+export interface BlockSource {
+  index: number;
+  title: string;
+  shortTitle: string;
+}
+
 export interface EnhancedTextBlock extends TextBlock {
   startIndex: number;
   endIndex: number;
@@ -38,6 +45,7 @@ export interface EnhancedTextBlock extends TextBlock {
   parentId?: number;
   isParent?: boolean;
   parentText?: string;
+  source?: BlockSource;
 }
 
 export interface Separator {

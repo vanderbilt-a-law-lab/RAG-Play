@@ -20,6 +20,8 @@ export type EmbeddingProgressMessage = {
   message?: string;
   output?: number[][][];
   type?: "question" | "blocks";
+  /** Echo of the request id so stale results can be ignored. 0 = model load only. */
+  requestId?: number;
 };
 
 export type EmbeddingTaskMessage = {
@@ -27,6 +29,8 @@ export type EmbeddingTaskMessage = {
   model: EmbeddingModel;
   type: "question" | "blocks";
   text: string | string[];
+  /** Caller-assigned id, echoed back on completion. 0 = model load only. */
+  requestId: number;
 };
 
 export type UILoadingState = {

@@ -1,4 +1,4 @@
-# Agent Instructions for RAG-Play
+# Agent Instructions for Legal RAG Playground (fork of RAG-Play)
 
 ## Build Commands
 
@@ -136,10 +136,11 @@ Husky runs `npm run lint` automatically before each commit.
 ## Environment Variables
 
 Required:
-- `GROQ_API_KEY` - API key for Groq LLM
-- `GROQ_MODEL` - Model identifier (e.g., "llama-3.1-70b-versatile")
+- `ANTHROPIC_API_KEY` - read by the Anthropic SDK in `src/app/api/generate/route.ts`
 
 Optional:
+- `ANTHROPIC_MODEL` - Claude model id (default `claude-opus-5`); must support adaptive thinking and `output_config.effort`
+- `ACCESS_CODE` - class code the browser must send (header `x-access-code`) before the server calls the model
 - `GOOGLE_SITE_VERIFICATION_ID` - For SEO verification
 
 ## Tech Stack
@@ -158,14 +159,18 @@ Optional:
 - `@huggingface/transformers` - ML embeddings
 - `langchain` - Text processing
 - `umap-js` - Dimensionality reduction
-- `ai` / `@ai-sdk/groq` - LLM integration
+- `@anthropic-ai/sdk` - Claude API (streaming, adaptive thinking, effort)
 - `zustand` - State management
 - `tailwindcss-animate` - Animations
 - `sonner` - Toast notifications
 
 ## Notes for Agents
 
-- This is a RAG (Retrieval-Augmented Generation) visualization tool
+- This is a RAG (Retrieval-Augmented Generation) teaching tool for law students; copy must stay plain (no practice jargon)
+- The corpus lives in `src/app/experiment/constants/legal-corpus.ts`; chunks are traced to documents by the `=== SOURCE n: title ===` header lines
+- Scenarios (class presets) live in `src/app/experiment/constants/scenarios.ts`
+- Generation streams newline-delimited JSON events (`thinking`, `text`, `done`, `error`) from `/api/generate`; the client hook is `src/app/hooks/useGeneration.ts`
+- Do not call Claude through any provider shim; use `@anthropic-ai/sdk` directly
 - Uses Web Workers for heavy computation (embedding generation)
 - Mobile devices are redirected from `/experiment` routes via middleware
 - No test framework currently configured

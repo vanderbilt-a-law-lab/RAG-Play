@@ -3,7 +3,8 @@ import {
   SplitStrategy,
   EnhancedTextBlock,
 } from "@/app/experiment/types/text-splitting";
-import { TEXT_SPLITTING_SAMPLE } from "@/app/experiment/constants/sample-texts";
+import { CORPUS_TEXT } from "@/app/experiment/constants/legal-corpus";
+
 interface TextSplittingState {
   text: string;
   blocks: EnhancedTextBlock[];
@@ -14,6 +15,7 @@ interface TextSplittingState {
   textareaRef: React.RefObject<HTMLTextAreaElement> | null;
   hoveredChunkIndex: number | null;
   setText: (text: string) => void;
+  resetText: () => void;
   setBlocks: (blocks: EnhancedTextBlock[]) => void;
   setStrategy: (strategy: SplitStrategy) => void;
   setParentChunkSize: (parentChunkSize: number) => void;
@@ -24,7 +26,7 @@ interface TextSplittingState {
 }
 
 export const useTextSplittingStore = create<TextSplittingState>((set) => ({
-  text: TEXT_SPLITTING_SAMPLE,
+  text: CORPUS_TEXT,
   blocks: [],
   strategy: "recursive-character",
   parentChunkSize: 1024,
@@ -33,6 +35,7 @@ export const useTextSplittingStore = create<TextSplittingState>((set) => ({
   textareaRef: null,
   hoveredChunkIndex: null,
   setText: (text) => set({ text }),
+  resetText: () => set({ text: CORPUS_TEXT }),
   setBlocks: (blocks) => set({ blocks }),
   setStrategy: (strategy) => set({ strategy }),
   setParentChunkSize: (parentChunkSize) => set({ parentChunkSize }),

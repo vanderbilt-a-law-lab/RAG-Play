@@ -1,12 +1,16 @@
 "use client"
 
-import { useEffect } from "react"
+import { useCallback, useEffect } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SplitSquareHorizontal, Boxes, Search, MessageSquare } from "lucide-react"
 import { useEmbeddingWorker } from "@/app/hooks/useEmbeddingWorker"
 import { useEmbeddingStore } from "@/app/stores/experiment/embedding-store"
 import { useTextSplittingStore } from "@/app/stores/experiment/text-splitting-store"
+import { useGenerationStore } from "@/app/stores/experiment/generation-store"
+import type { Scenario } from "@/app/experiment/constants/scenarios"
+import { ScenarioPicker } from "./scenario-picker"
 import { TextSplittingTab } from "./text-splitting-tab"
 import { EmbeddingTab } from "./embedding-tab"
 import { SemanticSearchTab } from "./semantic-search-tab"
@@ -33,9 +37,22 @@ export function ExperimentContent() {
   const activeStep = isExperimentStep(requestedStep)
     ? requestedStep
     : "text-splitting"
-  const { blocks } = useTextSplittingStore()
-  const { model, questionEmbedding, blocksEmbedding, recalculateSimilarities } =
-    useEmbeddingStore()
+  const {
+    blocks,
+    resetText,
+    setStrategy,
+    setChunkSize,
+    setOverlap,
+    setParentChunkSize,
+  } = useTextSplittingStore()
+  const {
+    model,
+    questionEmbedding,
+    blocksEmbedding,
+    recalculateSimilarities,
+    setQuestion,
+  } = useEmbeddingStore()
+  const { setPresetUserMessage, setEffort } = useGenerationStore()
   const embeddingWorker = useEmbeddingWorker({ blocks, model })
 
   useEffect(() => {
@@ -44,52 +61,90 @@ export function ExperimentContent() {
     }
   }, [questionEmbedding, blocksEmbedding, recalculateSimilarities])
 
-  const handleStepChange = (nextStep: string) => {
-    if (!isExperimentStep(nextStep)) {
-      return
-    }
+  const handleStepChange = useCallback(
+    (nextStep: string) => {
+      if (!isExperimentStep(nextStep)) {
+        return
+      }
 
-    const params = new URLSearchParams(searchParams.toString())
-    params.set("step", nextStep)
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-  }
+      const params = new URLSearchParams(searchParams.toString())
+      params.set("step", nextStep)
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    },
+    [pathname, router, searchParams]
+  )
+
+  const handleApplyScenario = useCallback(
+    (scenario: Scenario) => {
+      resetText()
+      setStrategy(scenario.strategy)
+      setChunkSize(scenario.chunkSize)
+      setOverlap(scenario.overlap)
+      if (scenario.parentChunkSize) {
+        setParentChunkSize(scenario.parentChunkSize)
+      }
+      setQuestion(scenario.question)
+      setPresetUserMessage(scenario.userMessage ?? null)
+      if (scenario.effort) {
+        setEffort(scenario.effort)
+      }
+      embeddingWorker.debouncedGetEmbedding(scenario.question)
+      toast.success(`Loaded scenario: ${scenario.title}`)
+      handleStepChange(scenario.tab)
+    },
+    [
+      embeddingWorker,
+      handleStepChange,
+      resetText,
+      setChunkSize,
+      setEffort,
+      setOverlap,
+      setParentChunkSize,
+      setPresetUserMessage,
+      setQuestion,
+      setStrategy,
+    ]
+  )
 
   return (
-    <Tabs value={activeStep} onValueChange={handleStepChange} className="space-y-4">
-      <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-4">
-        <TabsTrigger value="text-splitting" className="space-x-2">
-          <SplitSquareHorizontal className="h-4 w-4" />
-          <span>Text Splitting</span>
-        </TabsTrigger>
-        <TabsTrigger value="embedding" className="space-x-2">
-          <Boxes className="h-4 w-4" />
-          <span>Vector Embedding</span>
-        </TabsTrigger>
-        <TabsTrigger value="semantic-search" className="space-x-2">
-          <Search className="h-4 w-4" />
-          <span>Semantic Search</span>
-        </TabsTrigger>
-        <TabsTrigger value="generation" className="space-x-2">
-          <MessageSquare className="h-4 w-4" />
-          <span>Context Generation</span>
-        </TabsTrigger>
-      </TabsList>
+    <div className="space-y-4">
+      <ScenarioPicker onApply={handleApplyScenario} />
+      <Tabs value={activeStep} onValueChange={handleStepChange} className="space-y-4">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-4">
+          <TabsTrigger value="text-splitting" className="space-x-2">
+            <SplitSquareHorizontal className="h-4 w-4" />
+            <span>Text Splitting</span>
+          </TabsTrigger>
+          <TabsTrigger value="embedding" className="space-x-2">
+            <Boxes className="h-4 w-4" />
+            <span>Vector Embedding</span>
+          </TabsTrigger>
+          <TabsTrigger value="semantic-search" className="space-x-2">
+            <Search className="h-4 w-4" />
+            <span>Semantic Search</span>
+          </TabsTrigger>
+          <TabsTrigger value="generation" className="space-x-2">
+            <MessageSquare className="h-4 w-4" />
+            <span>Context Generation</span>
+          </TabsTrigger>
+        </TabsList>
 
-      <TabsContent value="text-splitting" forceMount>
-        <TextSplittingTab />
-      </TabsContent>
+        <TabsContent value="text-splitting" forceMount>
+          <TextSplittingTab />
+        </TabsContent>
 
-      <TabsContent value="embedding" forceMount>
-        <EmbeddingTab embeddingWorker={embeddingWorker} />
-      </TabsContent>
+        <TabsContent value="embedding" forceMount>
+          <EmbeddingTab embeddingWorker={embeddingWorker} />
+        </TabsContent>
 
-      <TabsContent value="semantic-search" forceMount>
-        <SemanticSearchTab embeddingWorker={embeddingWorker} />
-      </TabsContent>
+        <TabsContent value="semantic-search" forceMount>
+          <SemanticSearchTab embeddingWorker={embeddingWorker} />
+        </TabsContent>
 
-      <TabsContent value="generation" forceMount>
-        <GenerationTab />
-      </TabsContent>
-    </Tabs>
+        <TabsContent value="generation" forceMount>
+          <GenerationTab />
+        </TabsContent>
+      </Tabs>
+    </div>
   )
-} 
+}

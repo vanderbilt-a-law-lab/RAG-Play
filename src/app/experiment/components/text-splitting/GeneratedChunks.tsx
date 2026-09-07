@@ -8,6 +8,10 @@ import {
   RECURSIVE_CHARACTER_SEPARATORS,
 } from "@/app/experiment/types/text-splitting";
 import { splitText } from "@/app/utils/split-text";
+import {
+  findSourceForOffset,
+  findSourceRanges,
+} from "@/app/experiment/constants/legal-corpus";
 import { toast } from "sonner";
 import { useEffect } from "react";
 import { ParentGroup } from "./ParentGroup";
@@ -111,18 +115,23 @@ export const GeneratedChunks = () => {
       if (error) {
         throw error;
       }
+      const sourceRanges = findSourceRanges(text);
       const updatedBlocks = newBlocks.map((block, index) => {
+        const range = findSourceForOffset(sourceRanges, block.startIndex);
+        const source = range
+          ? { index: range.index, title: range.title, shortTitle: range.shortTitle }
+          : undefined;
         // For parent-child strategy, only calculate overlap within same parent
         if (strategy === "parent-child") {
           const previousBlock = newBlocks[index - 1];
           if (previousBlock && block.parentId === previousBlock.parentId) {
             const overlapText = findOverlap(block, previousBlock);
-            return { ...block, overlapText };
+            return { ...block, overlapText, source };
           }
-          return block;
+          return { ...block, source };
         }
         const overlapText = findOverlap(block, newBlocks[index - 1]);
-        return { ...block, overlapText: overlapText };
+        return { ...block, overlapText, source };
       });
       setBlocks(updatedBlocks);
     } catch (error) {

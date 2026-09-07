@@ -75,7 +75,6 @@ async function processBatchEmbeddings(
 self.addEventListener(
   "message",
   async (event: MessageEvent<EmbeddingTaskMessage>) => {
-    console.log("Worker received message:", event.data);
 
     try {
       if (!event.data.task) {
@@ -101,6 +100,7 @@ self.addEventListener(
         self.postMessage({
           status: "complete",
           type: event.data.type,
+          requestId: event.data.requestId,
           output: [],
         } as EmbeddingProgressMessage);
         return;
@@ -110,11 +110,10 @@ self.addEventListener(
         ? await processBatchEmbeddings(task, event.data.text)
         : await task(event.data.text, { normalize: true, pooling: "cls" });
 
-      console.log("Feature extraction completed");
-
       self.postMessage({
         status: "complete",
         type: event.data.type,
+        requestId: event.data.requestId,
         output: Array.isArray(output)
           ? output.map((o) => o.tolist())
           : [output.tolist()],
@@ -123,6 +122,8 @@ self.addEventListener(
       console.error("Worker error:", error);
       self.postMessage({
         status: "error",
+        type: event.data.type,
+        requestId: event.data.requestId,
         message: error instanceof Error ? error.message : String(error),
       } as EmbeddingProgressMessage);
     }
