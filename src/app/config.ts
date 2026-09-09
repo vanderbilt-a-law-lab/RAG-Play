@@ -16,7 +16,7 @@ export const DEFAULT_ANTHROPIC_MODEL = "claude-opus-5";
 
 export default class AppConfig {
   static readonly anthropic = {
-    model: process.env.ANTHROPIC_MODEL || DEFAULT_ANTHROPIC_MODEL,
+    model: process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_ANTHROPIC_MODEL,
     /** Hard ceiling on output tokens per request (thinking tokens count). */
     maxOutputTokens: 4096,
     /** Ceiling on the system prompt (retrieved passages + instructions). */
@@ -25,7 +25,7 @@ export default class AppConfig {
     maxQuestionChars: 2000,
   };
 
-  static readonly accessCode = process.env.ACCESS_CODE || "";
+  static readonly accessCode = process.env.ACCESS_CODE?.trim() || "";
 
   /** Per-connection limits enforced in memory by the generate route. */
   static readonly rateLimit = {
@@ -33,6 +33,7 @@ export default class AppConfig {
     perHour: 60,
   };
 
+  /** Empty strings (an env var created without a value) are treated as unset. */
   static readonly googleSiteVerificationId =
-    process.env.GOOGLE_SITE_VERIFICATION_ID;
+    process.env.GOOGLE_SITE_VERIFICATION_ID?.trim() || undefined;
 }

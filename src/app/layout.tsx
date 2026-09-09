@@ -46,6 +46,12 @@ export const metadata: Metadata = {
     description:
       "Watch each step of a RAG pipeline run over real legal sources.",
   },
+  // Rendered through the metadata API rather than a hand-written <head>, so an
+  // empty or missing value produces no tag at all. A literal "" inside <head>
+  // broke hydration on Vercel with React error #329.
+  ...(AppConfig.googleSiteVerificationId
+    ? { verification: { google: AppConfig.googleSiteVerificationId } }
+    : {}),
 };
 
 export default function RootLayout({
@@ -55,15 +61,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <head>
-        {/* Google Search Console Verification */}
-        {AppConfig.googleSiteVerificationId && (
-          <meta
-            name="google-site-verification"
-            content={AppConfig.googleSiteVerificationId}
-          />
-        )}
-      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
