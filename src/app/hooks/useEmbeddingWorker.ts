@@ -8,6 +8,7 @@ import {
   UIFileProgress,
 } from "@/app/experiment/types/embedding";
 import { useEmbeddingStore } from "@/app/stores/experiment/embedding-store";
+import { RERANKER_MODEL } from "@/app/experiment/types/embedding";
 import { EMBEDDING_CONSTANTS } from "./useEmbeddingConstants";
 
 interface UseEmbeddingWorkerProps {
@@ -24,6 +25,8 @@ export interface UseEmbeddingWorkerReturn {
   setIsLoadingExpanded: (expanded: boolean) => void;
   /** Embed a question (debounced). Pass nothing to re-embed the current chunks. */
   debouncedGetEmbedding: (question?: string) => void;
+  /** Score (question, passage) pairs with the reranker; results land in the store. */
+  requestRerank: (question: string, items: { index: number; text: string }[]) => void;
 }
 
 const LOAD_ONLY_REQUEST_ID = 0;
@@ -55,10 +58,12 @@ export function useEmbeddingWorker({
   const workerRef = useRef<Worker | null>(null);
   const modelReadyRef = useRef(false);
   const requestCounterRef = useRef(LOAD_ONLY_REQUEST_ID);
-  const latestRequestRef = useRef<{ blocks: number; question: number }>({
+  const latestRequestRef = useRef<{ blocks: number; question: number; rerank: number }>({
     blocks: LOAD_ONLY_REQUEST_ID,
     question: LOAD_ONLY_REQUEST_ID,
+    rerank: LOAD_ONLY_REQUEST_ID,
   });
+  const rerankIndexesRef = useRef<Map<number, number[]>>(new Map());
   const pendingBlockTextsRef = useRef<string[] | null>(null);
   const blocksRef = useRef(blocks);
   blocksRef.current = blocks;
@@ -111,9 +116,50 @@ export function useEmbeddingWorker({
     [postTask, setBlocksEmbedding]
   );
 
+  const requestRerank = useCallback(
+    (question: string, items: { index: number; text: string }[]): void => {
+      if (!workerRef.current || items.length === 0 || !question.trim()) {
+        return;
+      }
+      requestCounterRef.current += 1;
+      const requestId = requestCounterRef.current;
+      latestRequestRef.current.rerank = requestId;
+      rerankIndexesRef.current.set(requestId, items.map((item) => item.index));
+      const message: EmbeddingTaskMessage = {
+        task: "rerank",
+        model: RERANKER_MODEL,
+        type: "rerank",
+        query: question,
+        texts: items.map((item) => item.text),
+        requestId,
+      };
+      workerRef.current.postMessage(message);
+      setLoadingState({ status: "embedding" });
+    },
+    []
+  );
+
   const handleWorkerMessage = useCallback(
     (event: MessageEvent<EmbeddingProgressMessage>): void => {
-      const { status, progress, message, output, type, requestId } = event.data;
+      const { status, progress, message, output, type, requestId, scores } =
+        event.data;
+
+      if (type === "rerank" && (status === "complete" || status === "error")) {
+        const indexes = requestId !== undefined ? rerankIndexesRef.current.get(requestId) : undefined;
+        if (requestId !== undefined) rerankIndexesRef.current.delete(requestId);
+        if (requestId !== latestRequestRef.current.rerank) {
+          return; // superseded
+        }
+        setLoadingState({ status: "idle" });
+        if (status === "error" || !indexes || !scores) {
+          useEmbeddingStore.getState().markRerankFailed();
+          return;
+        }
+        useEmbeddingStore
+          .getState()
+          .applyRerank(indexes.map((index, i) => ({ index, score: scores[i] })));
+        return;
+      }
 
       if (status === "loading" && progress?.file) {
         setLoadingState({ status: "loading-model", progress });
@@ -269,5 +315,6 @@ export function useEmbeddingWorker({
     isLoadingExpanded,
     setIsLoadingExpanded,
     debouncedGetEmbedding,
+    requestRerank,
   };
 }

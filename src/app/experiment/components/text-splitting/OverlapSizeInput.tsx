@@ -27,8 +27,9 @@ export const OverlapSizeInput = () => {
             </TooltipTrigger>
             <TooltipContent>
               <p>
-                Number of characters to overlap between chunks. Helps maintain
-                context across chunk boundaries.
+                How many characters from the end of one chunk are repeated at
+                the start of the next, so a sentence cut at the boundary shows
+                up in both.
               </p>
             </TooltipContent>
           </Tooltip>

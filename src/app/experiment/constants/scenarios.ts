@@ -1,5 +1,6 @@
 import type { SplitStrategy } from "@/app/experiment/types/text-splitting";
 import type { EffortLevel } from "@/app/experiment/types/generation";
+import type { RetrievalSettings } from "@/app/stores/experiment/embedding-store";
 import { DEFAULT_QUESTION } from "@/app/experiment/constants/embedding";
 
 export type ScenarioTab =
@@ -24,6 +25,8 @@ export interface Scenario {
   parentChunkSize?: number;
   /** Chunks shorter than this merge into their neighbor. Default 60. */
   minChunkSize?: number;
+  /** Retrieval toggles to switch on for this scenario; everything else resets to off. */
+  retrieval?: Partial<RetrievalSettings>;
   /** Retrieval question (Semantic Search tab). */
   question: string;
   /** Message sent to the model, when it should differ from the retrieval question. */
@@ -35,9 +38,9 @@ export interface Scenario {
 export const SCENARIOS: Scenario[] = [
   {
     id: "corpus",
-    title: "Start here: four legal sources",
+    title: "Start here: five legal sources",
     summary:
-      "A Fifth Circuit sanctions opinion, Federal Rule of Civil Procedure 11, a judge's standing order on generative AI, and a fictional engagement letter, split with the usual default settings.",
+      "A Fifth Circuit sanctions opinion, Federal Rule of Civil Procedure 11, a judge's standing order on generative AI, a fictional engagement letter, and a proposed rule that was never adopted, split with the usual default settings.",
     watchFor:
       "Where the chunk boundaries fall. Notice which chunks carry a source header and which do not, and where a section gets cut in two.",
     strategy: "recursive-character",
@@ -106,5 +109,53 @@ export const SCENARIOS: Scenario[] = [
     tab: "text-splitting",
   },
 ];
+
+SCENARIOS.push(
+  {
+    id: "exact-name",
+    title: "Names and citations: keyword vs. meaning",
+    summary:
+      "Meaning-based search is weakest on exact names, citations, and section numbers. Hybrid search adds keyword matching.",
+    watchFor:
+      "With keyword matching on, the passage that names Harvey.AI is first. Turn it off under Search settings: similarity alone ranks it lower, behind passages about AI in general.",
+    strategy: "recursive-character",
+    chunkSize: 500,
+    overlap: 50,
+    retrieval: { hybrid: true },
+    question: "Where is Harvey.AI mentioned?",
+    effort: "low",
+    tab: "semantic-search",
+  },
+  {
+    id: "not-adopted",
+    title: "A rule that was never adopted",
+    summary:
+      "The Fifth Circuit proposed an AI-certification rule in 2023 and then declined to adopt it. The proposal reads like a rule, and similarity search treats it like one.",
+    watchFor:
+      "The proposed rule takes the top spots with a red \"Not adopted\" flag. Nothing in the similarity score says it never became law. Tick \"Hide sources a citator flags\" under Search settings and watch it disappear, then generate an answer and see whether the model repeats the warning.",
+    strategy: "recursive-character",
+    chunkSize: 500,
+    overlap: 50,
+    question:
+      "What must the certificate of compliance say about generative artificial intelligence?",
+    effort: "low",
+    tab: "semantic-search",
+  },
+  {
+    id: "reranker",
+    title: "A second look: the reranker",
+    summary:
+      "A slower model rereads the top 10 passages together with your question and rescores them.",
+    watchFor:
+      "The \"was #n\" labels show what moved. The reranker downloads once (about 25 MB). Commercial tools run a step like this before anything reaches the model.",
+    strategy: "recursive-character",
+    chunkSize: 500,
+    overlap: 50,
+    retrieval: { rerank: true },
+    question: "How much was the sanction?",
+    effort: "low",
+    tab: "semantic-search",
+  }
+);
 
 export const DEFAULT_SCENARIO = SCENARIOS[0];

@@ -107,21 +107,27 @@ export const GeneratedChunks = () => {
 
   const debouncedSplitText = useDebouncedCallback(async () => {
     try {
+      const sourceRanges = findSourceRanges(text);
       const { blocks: newBlocks, error } = await splitText(text, strategy, {
         chunkSize,
         overlap,
         separators,
         parentChunkSize,
         minChunkSize,
+        sourceStarts: sourceRanges.map((range) => range.start),
       });
       if (error) {
         throw error;
       }
-      const sourceRanges = findSourceRanges(text);
       const updatedBlocks = newBlocks.map((block, index) => {
         const range = findSourceForOffset(sourceRanges, block.startIndex);
         const source = range
-          ? { index: range.index, title: range.title, shortTitle: range.shortTitle }
+          ? {
+              index: range.index,
+              title: range.title,
+              shortTitle: range.shortTitle,
+              citator: range.citator,
+            }
           : undefined;
         // For parent-child strategy, only calculate overlap within same parent
         if (strategy === "parent-child") {

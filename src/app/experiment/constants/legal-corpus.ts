@@ -2,13 +2,21 @@
  * The teaching corpus: four short legal sources chosen so that each of the
  * failure modes discussed in class can be seen in the pipeline.
  *
- * Sources 1 through 3 are public-domain government texts reproduced from the
- * URLs given (the opinion is excerpted; omissions are marked). Source 4 is a
- * fictional engagement letter written for this course; the companies in it
- * do not exist.
+ * Sources 1 through 3 and 5 are public-domain government texts reproduced
+ * from the URLs given (the opinion is excerpted; omissions are marked).
+ * Source 4 is a fictional engagement letter written for this course; the
+ * companies in it do not exist. Source 5 is a proposed rule the court never
+ * adopted, included so a citator flag has something to flag.
  */
 
-export type CorpusDocumentType = "opinion" | "rule" | "order" | "contract";
+import type { CitatorFlag } from "@/app/experiment/types/text-splitting";
+
+export type CorpusDocumentType =
+  | "opinion"
+  | "rule"
+  | "order"
+  | "contract"
+  | "proposed-rule";
 
 export interface CorpusDocument {
   id: string;
@@ -22,6 +30,8 @@ export interface CorpusDocument {
   citation?: string;
   sourceUrl: string;
   note?: string;
+  /** What a citator would say about relying on this source. */
+  citator: CitatorFlag;
   text: string;
 }
 
@@ -175,6 +185,18 @@ Sablefield Robotics, Inc.
 By: General Counsel
 Date:`;
 
+const PROPOSED_RULE_TEXT = `United States Court of Appeals for the Fifth Circuit. Notice of Proposed Amendment to 5th Cir. R. 32.3.
+
+Pursuant to 28 U.S.C. § 2071, we give notice the court is considering amending 5th Cir. R. 32.3 and Form 6 as shown below. Proposed changes are "redline text." We solicit written comments for consideration on the proposed changes through January 4, 2024. Lyle W. Cayce, Clerk of Court.
+
+Fifth Circuit Rule 32.3 (proposed text)
+
+32.3. Certificate of Compliance. See Form 6 in the Appendix of Forms to the Fed. R. App. P. Additionally, counsel and unrepresented filers must further certify that no generative artificial intelligence program was used in drafting the document presented for filing, or to the extent such a program was used, all generated text, including all citations and legal analysis, has been reviewed for accuracy and approved by a human. A material misrepresentation in the certificate of compliance may result in striking the document and sanctions against the person signing the document.
+
+Form 6. Certificate of Compliance (proposed addition)
+
+3. This document complies with the AI usage reporting requirement of 5th Cir. R. 32.3 because: no generative artificial intelligence program was used in the drafting of this document, or a generative artificial intelligence program was used in the drafting of this document and all generated text, including all citations and legal analysis, has been reviewed for accuracy and approved by a human.`;
+
 export const LEGAL_CORPUS: CorpusDocument[] = [
   {
     id: "fletcher",
@@ -188,6 +210,11 @@ export const LEGAL_CORPUS: CorpusDocument[] = [
     sourceUrl:
       "https://www.courtlistener.com/opinion/10795846/fletcher-v-experian-info-solutions/",
     note: "excerpt; footnotes and the table of fabricated quotations omitted",
+    citator: {
+      status: "good",
+      label: "No negative history",
+      note: "Published Fifth Circuit order; no later history as of September 2026.",
+    },
     text: FLETCHER_TEXT,
   },
   {
@@ -199,6 +226,11 @@ export const LEGAL_CORPUS: CorpusDocument[] = [
     dateLabel: "current text",
     citation: "Fed. R. Civ. P. 11",
     sourceUrl: "https://www.law.cornell.edu/rules/frcp/rule_11",
+    citator: {
+      status: "good",
+      label: "In force",
+      note: "Current text of the rule.",
+    },
     text: RULE_11_TEXT,
   },
   {
@@ -210,6 +242,11 @@ export const LEGAL_CORPUS: CorpusDocument[] = [
     jurisdiction: "U.S. District Court, Northern District of Texas",
     dateLabel: "May 30, 2023 (text as posted in 2024)",
     sourceUrl: "https://www.txnd.uscourts.gov/judge/judge-brantley-starr",
+    citator: {
+      status: "caution",
+      label: "Check current version",
+      note: "Judge-specific requirements are revised without notice. This is the text as posted in 2024; the court's page has the current one.",
+    },
     text: STARR_ORDER_TEXT,
   },
   {
@@ -222,7 +259,30 @@ export const LEGAL_CORPUS: CorpusDocument[] = [
     dateLabel: "Mar. 2, 2026",
     sourceUrl: "https://github.com/vanderbilt-a-law-lab/RAG-Play",
     note: "written for this course; the companies do not exist",
+    citator: {
+      status: "none",
+      label: "Not an authority",
+      note: "A private contract binds only its parties. It cannot be cited as law.",
+    },
     text: ENGAGEMENT_LETTER_TEXT,
+  },
+  {
+    id: "proposed-rule-32-3",
+    title:
+      "Proposed Amendment to 5th Cir. R. 32.3 and Form 6, Notice for Public Comment (Nov. 2023) (never adopted)",
+    shortTitle: "Proposed 5th Cir. R. 32.3 (not adopted)",
+    type: "proposed-rule",
+    jurisdiction: "U.S. Court of Appeals, Fifth Circuit",
+    dateLabel: "Nov. 2023; comment period closed Jan. 4, 2024",
+    sourceUrl:
+      "https://www.ca5.uscourts.gov/docs/default-source/default-document-library/public-comment-local-rule-32-3-and-form-6",
+    note: "notice text and proposed rule; the court declined to adopt it in June 2024",
+    citator: {
+      status: "negative",
+      label: "Not adopted",
+      note: "The Fifth Circuit published this proposal for comment and then declined to adopt it (June 2024). It was never a rule. Fletcher v. Experian recounts the history.",
+    },
+    text: PROPOSED_RULE_TEXT,
   },
 ];
 
@@ -243,12 +303,16 @@ export interface SourceRange {
   index: number;
   title: string;
   shortTitle: string;
+  citator?: CitatorFlag;
   start: number;
   end: number;
 }
 
+const documentFor = (title: string): CorpusDocument | undefined =>
+  LEGAL_CORPUS.find((doc) => doc.title === title);
+
 const shortTitleFor = (title: string): string => {
-  const known = LEGAL_CORPUS.find((doc) => doc.title === title);
+  const known = documentFor(title);
   if (known) {
     return known.shortTitle;
   }
@@ -276,6 +340,7 @@ export const findSourceRanges = (text: string): SourceRange[] => {
     index: header.index,
     title: header.title,
     shortTitle: shortTitleFor(header.title),
+    citator: documentFor(header.title)?.citator,
     start: header.start,
     end: i + 1 < headers.length ? headers[i + 1].start : text.length,
   }));

@@ -7,6 +7,7 @@ const TYPE_LABELS: Record<string, string> = {
   rule: "Procedural rule",
   order: "Standing order",
   contract: "Contract",
+  "proposed-rule": "Proposed rule",
 };
 
 export const CorpusLegend = () => (

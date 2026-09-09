@@ -21,6 +21,7 @@ const docs = [
   ["Rule11", "RULE_11_TEXT", "Federal Rule of Civil Procedure 11"],
   ["Starr", "STARR_ORDER_TEXT", "Judge Brantley Starr (N.D. Tex.), Mandatory Certification Regarding Generative Artificial Intelligence (judge-specific requirement, first posted May 30, 2023)"],
   ["Letter", "ENGAGEMENT_LETTER_TEXT", "Engagement Letter, Cumberland & Ross LLP to Sablefield Robotics, Inc. (fictional teaching document, Mar. 2, 2026)"],
+  ["Proposed", "PROPOSED_RULE_TEXT", "Proposed Amendment to 5th Cir. R. 32.3 and Form 6, Notice for Public Comment (Nov. 2023) (never adopted)"],
 ];
 const corpus = docs.map(([, k, title], i) => `=== SOURCE ${i + 1}: ${title} ===\n\n${texts[k].trim()}`).join("\n\n\n");
 const ranges = [];
@@ -42,7 +43,8 @@ const mergeTiny = (chunks, min) => {
   if (min <= 0) return chunks;
   const out = [];
   for (const c of chunks) {
-    if (c.text.length < min && out.length > 0) {
+    const prev = out[out.length - 1];
+    if (c.text.length < min && prev && prev.doc === c.doc) {
       const prev = out[out.length - 1];
       prev.text = prev.text + "\n\n" + c.text;
       prev.merged = (prev.merged || 0) + 1;

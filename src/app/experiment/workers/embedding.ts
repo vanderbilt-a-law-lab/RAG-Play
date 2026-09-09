@@ -3,6 +3,10 @@ import {
   Tensor,
   FeatureExtractionPipeline,
   ProgressInfo,
+  AutoTokenizer,
+  AutoModelForSequenceClassification,
+  PreTrainedTokenizer,
+  PreTrainedModel,
 } from "@huggingface/transformers";
 import {
   EmbeddingProgressMessage,
@@ -63,15 +67,72 @@ async function embedMany(
   return output;
 }
 
+// The reranker is a cross-encoder: it reads the question and a passage
+// together and outputs one relevance score. Loaded on first use.
+let reranker: Promise<{
+  tokenizer: PreTrainedTokenizer;
+  model: PreTrainedModel;
+}> | null = null;
+
+const getReranker = (
+  modelId: string,
+  report: (message: EmbeddingProgressMessage) => void
+) => {
+  if (!reranker) {
+    const progress_callback = (progress: ProgressInfo) => {
+      if (progress.status === "progress") {
+        report({ status: "loading", progress, message: "Reranker loading" });
+      }
+    };
+    reranker = Promise.all([
+      AutoTokenizer.from_pretrained(modelId, { progress_callback }),
+      AutoModelForSequenceClassification.from_pretrained(modelId, {
+        dtype: "q8",
+        progress_callback,
+      }),
+    ]).then(([tokenizer, model]) => ({ tokenizer, model }));
+  }
+  return reranker;
+};
+
+const rerank = async (
+  modelId: string,
+  query: string,
+  texts: string[],
+  report: (message: EmbeddingProgressMessage) => void
+): Promise<number[]> => {
+  const { tokenizer, model } = await getReranker(modelId, report);
+  const inputs = tokenizer(new Array(texts.length).fill(query), {
+    text_pair: texts,
+    padding: true,
+    truncation: true,
+  });
+  const { logits } = (await model(inputs)) as { logits: Tensor };
+  return (logits.sigmoid().tolist() as number[][]).map((row) => row[0]);
+};
+
 self.addEventListener(
   "message",
   async (event: MessageEvent<EmbeddingTaskMessage>) => {
-    const { task: taskName, model, type, text, requestId } = event.data;
+    const { requestId } = event.data;
     try {
-      if (taskName !== "feature-extraction") {
-        throw new Error(`Invalid task: ${taskName}`);
+      if (event.data.task === "rerank") {
+        const scores = await rerank(
+          event.data.model,
+          event.data.query,
+          event.data.texts,
+          (m) => self.postMessage(m)
+        );
+        self.postMessage({
+          status: "complete",
+          type: "rerank",
+          requestId,
+          scores,
+        } as EmbeddingProgressMessage);
+        return;
       }
 
+      const { model, type, text } = event.data;
       const option = getEmbeddingModelOption(model);
       const task = await getPipeline(model, (m) => self.postMessage(m));
 
@@ -101,7 +162,7 @@ self.addEventListener(
       console.error("Worker error:", error);
       self.postMessage({
         status: "error",
-        type,
+        type: event.data.type,
         requestId,
         message: error instanceof Error ? error.message : String(error),
       } as EmbeddingProgressMessage);

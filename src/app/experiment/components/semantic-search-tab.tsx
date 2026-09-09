@@ -18,6 +18,7 @@ import { groupPointsBySource } from "@/app/experiment/utils/source-groups";
 import { EMBEDDING_CONSTANTS } from "@/app/hooks";
 import { EmbeddingDisplay } from "./embedding/EmbeddingDisplay";
 import { SimilarityPanel } from "./embedding/SimilarityPanel";
+import { RetrievalControls } from "./embedding/RetrievalControls";
 
 interface SemanticSearchTabProps {
   embeddingWorker: UseEmbeddingWorkerReturn;
@@ -33,6 +34,8 @@ export function SemanticSearchTab({
     questionEmbedding,
     blocksEmbedding,
     model,
+    retrieval,
+    rerankStatus,
     setQuestion,
     clearSemanticSearch,
   } = useEmbeddingStore();
@@ -68,7 +71,9 @@ export function SemanticSearchTab({
   // can be read against the spread rather than on its own.
   const scoreContext = useMemo(() => {
     if (similarities.length < 3) return null;
-    const scores = similarities.map((s) => s.similarity);
+    const scores = similarities
+      .map((s) => s.similarity)
+      .sort((a, b) => b - a);
     const best = scores[0];
     const median = scores[Math.floor(scores.length / 2)];
     const worst = scores[scores.length - 1];
@@ -103,10 +108,10 @@ export function SemanticSearchTab({
       <CardHeader>
         <CardTitle>Semantic Search</CardTitle>
         <CardDescription>
-          Your question is turned into a vector and compared with every
-          chunk&apos;s vector. The closest chunks are what the model will be
-          given. Nothing here reads the law; it measures similarity of
-          wording.
+          Your question is turned into a list of numbers and compared with
+          every chunk&apos;s list. The closest chunks are what the model will
+          be given. Nothing here reads the law; it measures how alike the
+          wording is.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -115,6 +120,8 @@ export function SemanticSearchTab({
           questionEmbedding={questionEmbedding}
           onQuestionChange={handleQuestionChange}
         />
+
+        <RetrievalControls />
 
         {embedding2d.length > 0 && (
           <div className="flex flex-col gap-4 lg:flex-row">
@@ -132,18 +139,19 @@ export function SemanticSearchTab({
 
             <div className="space-y-2 rounded-lg border border-border bg-muted/50 p-4 text-sm text-muted-foreground lg:w-1/2">
               <p>
-                The question is embedded with the same model as the chunks
+                The same model that turned the chunks into numbers turns your
+                question into numbers
                 {modelOption.queryPrefix
-                  ? ", with a search prefix the model was trained to expect on questions but not on passages,"
-                  : ""}{" "}
-                and every chunk is ranked by cosine similarity to it. Dashed
-                lines join the question to its five nearest chunks in this
-                projection.
+                  ? " (with a short label in front that this model was trained to expect on questions)"
+                  : ""}
+                . Every chunk then gets a similarity score from 0 to 1.
+                Dashed lines join the question to its five nearest chunks on
+                this map.
               </p>
               <p>
-                Points are colored by source document. The projection is
-                approximate: two points can look close here and still rank
-                far apart in the full vector space.
+                Points are colored by source document. The map is a rough
+                sketch of hundreds of numbers squeezed into two, so two points
+                can look close here and still score far apart.
               </p>
               {scoreContext && (
                 <div className="space-y-1 border-t pt-2">
@@ -175,7 +183,10 @@ export function SemanticSearchTab({
         <SimilarityPanel
           similarities={similarities}
           blocks={blocks}
-          isLoading={loadingState.status === "embedding"}
+          isLoading={loadingState.status === "embedding" && rerankStatus !== "pending"}
+          query={question}
+          retrieval={retrieval}
+          rerankStatus={rerankStatus}
         />
       </CardContent>
     </Card>

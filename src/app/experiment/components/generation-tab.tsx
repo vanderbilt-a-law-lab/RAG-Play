@@ -42,6 +42,7 @@ import {
   type EffortLevel,
 } from "@/app/experiment/types/generation";
 import { useGeneration } from "@/app/hooks/useGeneration";
+import type { BlockSource } from "@/app/experiment/types/text-splitting";
 import AppConfigPublic from "@/app/experiment/constants/generation-ui";
 import { MessageDisplay } from "./message-display";
 import { cn } from "@/lib/utils";
@@ -60,6 +61,12 @@ const GENERATION_SPLIT_HEIGHT_CLASS =
   "h-[max(38rem,min(56rem,calc(100vh-12.5rem)))]";
 
 const ACCESS_CODE_STORAGE_KEY = "legal-rag-playground.access-code";
+
+/** Only caution and negative flags are worth the model's attention. */
+const citatorLabelFor = (source: BlockSource | undefined): string | null =>
+  source?.citator && (source.citator.status === "negative" || source.citator.status === "caution")
+    ? source.citator.label
+    : null;
 
 const readStoredAccessCode = (): string => {
   try {
@@ -132,6 +139,7 @@ export function GenerationTab() {
             byParent.set(block.parentId, {
               number: byParent.size + 1,
               sourceTitle: block.source?.title ?? null,
+              citatorLabel: citatorLabelFor(block.source),
               text: block.parentText,
             });
           }
@@ -145,6 +153,7 @@ export function GenerationTab() {
       .map((block, i) => ({
         number: i + 1,
         sourceTitle: block.source?.title ?? null,
+        citatorLabel: citatorLabelFor(block.source),
         text: block.text,
       }));
   }, [blocks, similarities, strategy, topK]);
@@ -192,7 +201,7 @@ export function GenerationTab() {
   const thirdStep: PipelineStep = (() => {
     if (generation.status === "error") {
       return {
-        label: "The model call failed",
+        label: "The request to the model failed",
         state: "error",
         detail: generation.error ?? "Unknown error",
       };
@@ -221,21 +230,21 @@ export function GenerationTab() {
         parts.push("the model declined to answer");
       }
       return {
-        label: "Generated a grounded response",
+        label: "The model wrote an answer from those passages",
         state: "done",
         detail: parts.join(" · "),
       };
     }
-    return { label: "Ready to generate a grounded response", state: "todo" };
+    return { label: "Ready to send it to the model", state: "todo" };
   })();
 
   const steps: PipelineStep[] = [
     {
-      label: `Retrieved ${passages.length} passage${passages.length === 1 ? "" : "s"} from the Semantic Search tab`,
+      label: `Took the top ${passages.length} passage${passages.length === 1 ? "" : "s"} from the Semantic Search tab`,
       state: hasGenerationInput ? "done" : "todo",
     },
     {
-      label: "Composed system instructions and user question",
+      label: "Combined the hidden instructions, the passages, and your question",
       state: hasGenerationInput ? "done" : "todo",
     },
     thirdStep,
@@ -434,7 +443,7 @@ export function GenerationTab() {
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <section className="space-y-2" aria-label="Prompt Preview Section">
-            <label className="text-sm font-medium">Prompt Preview:</label>
+            <label className="text-sm font-medium">What the model receives:</label>
             <div
               className={cn(
                 GENERATION_SPLIT_HEIGHT_CLASS,
@@ -450,7 +459,7 @@ export function GenerationTab() {
                       className="bg-muted"
                       isEditable
                       onEdit={setSystemMessage}
-                      label="System Message"
+                      label="Hidden instructions (the system message)"
                     />
                     <MessageDisplay
                       message={userMessage}
@@ -458,12 +467,12 @@ export function GenerationTab() {
                       className="bg-muted"
                       isEditable
                       onEdit={setUserMessage}
-                      label="User Message"
+                      label="Your question (the user message)"
                     />
                   </div>
                 ) : (
                   <div className="flex h-full items-center justify-center text-muted-foreground">
-                    Start by asking a question in the Semantic Search tab
+                    Type a question in the Semantic Search tab first
                   </div>
                 )}
               </ScrollArea>
@@ -471,14 +480,14 @@ export function GenerationTab() {
           </section>
 
           <section className="space-y-2" aria-label="Generated Answer Section">
-            <label className="text-sm font-medium">Model Response:</label>
+            <label className="text-sm font-medium">What the model wrote:</label>
             <div
               className={cn(GENERATION_SPLIT_HEIGHT_CLASS, "flex flex-col gap-4")}
             >
               <div className="rounded-lg border-2 border-dashed border-muted-foreground/25 p-4">
                 <div className="mb-3 flex items-center gap-2 text-sm font-medium">
                   <ListChecks className="h-4 w-4 text-muted-foreground" aria-hidden />
-                  <span>Generation pipeline</span>
+                  <span>What happens when you click Generate</span>
                 </div>
                 {hasGenerationInput ? (
                   <div className="space-y-3">
@@ -546,7 +555,7 @@ export function GenerationTab() {
                   </div>
                 ) : (
                   <div className="flex items-center justify-center text-muted-foreground">
-                    Run semantic search first to prepare generation context
+                    Type a question in the Semantic Search tab first
                   </div>
                 )}
               </div>
@@ -565,7 +574,7 @@ export function GenerationTab() {
                     <div className="flex h-full items-center justify-center text-muted-foreground">
                       {isStreaming
                         ? "Waiting for the first tokens..."
-                        : 'Click "Generate Response" to see the model’s answer'}
+                        : 'Click "Generate Response" to see what the model writes'}
                     </div>
                   )}
                 </ScrollArea>

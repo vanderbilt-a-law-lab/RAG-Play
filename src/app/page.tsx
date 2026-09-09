@@ -35,7 +35,7 @@ const features = [
   {
     title: "Text Splitting",
     description:
-      "Four legal sources get cut into chunks. Change the strategy and the chunk size and see where the cuts fall.",
+      "Five legal sources get cut into chunks. Change the strategy and the chunk size and see where the cuts fall.",
     icon: <SplitSquareHorizontal className="h-6 w-6 text-primary" />,
     href: "/experiment?step=text-splitting",
   },

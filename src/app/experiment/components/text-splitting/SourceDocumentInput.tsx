@@ -43,9 +43,9 @@ export const SourceDocumentInput = () => {
             size="sm"
             onClick={resetText}
             className="h-7 text-xs"
-            aria-label="Restore the four legal sources"
+            aria-label="Restore the five legal sources"
           >
-            Restore the four sources
+            Restore the five sources
           </Button>
         )}
       </div>

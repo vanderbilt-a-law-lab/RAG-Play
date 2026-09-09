@@ -45,17 +45,24 @@ type SplitTextResult = {
 export const mergeTinyBlocks = (
   text: string,
   blocks: EnhancedTextBlock[],
-  minChars: number
+  minChars: number,
+  /** Offsets where a new source document starts; merges never cross one. */
+  boundaries: number[] = []
 ): EnhancedTextBlock[] => {
   if (minChars <= 0) {
     return blocks;
   }
+  const crossesBoundary = (from: number, to: number): boolean =>
+    boundaries.some((b) => b > from && b <= to);
   const merged: EnhancedTextBlock[] = [];
   for (const block of blocks) {
     const previous = merged[merged.length - 1];
     const sameParent =
       previous !== undefined && previous.parentId === block.parentId;
-    if (block.text.length < minChars && previous && sameParent) {
+    const sameSource =
+      previous !== undefined &&
+      !crossesBoundary(previous.startIndex, block.startIndex);
+    if (block.text.length < minChars && previous && sameParent && sameSource) {
       previous.endIndex = block.endIndex;
       previous.text = text.slice(previous.startIndex, block.endIndex);
     } else {
@@ -74,6 +81,8 @@ export const splitText = async (
     separators: Separator | Separator[];
     parentChunkSize?: number;
     minChunkSize?: number;
+    /** Start offsets of source documents, so merging never crosses one. */
+    sourceStarts?: number[];
   }
 ): Promise<SplitTextResult> => {
   try {
@@ -81,6 +90,7 @@ export const splitText = async (
       return { blocks: [] };
     }
     const minChunkSize = options.minChunkSize ?? 0;
+    const sourceStarts = options.sourceStarts ?? [];
 
     const separatorList = getSeparatorList(options.separators);
     const splitterConfig = {
@@ -145,7 +155,9 @@ export const splitText = async (
           }
         }
 
-        return { blocks: mergeTinyBlocks(text, allChildBlocks, minChunkSize) };
+        return {
+          blocks: mergeTinyBlocks(text, allChildBlocks, minChunkSize, sourceStarts),
+        };
       }
       default:
         return {
@@ -166,7 +178,7 @@ export const splitText = async (
         endIndex,
       };
     });
-    return { blocks: mergeTinyBlocks(text, blocks, minChunkSize) };
+    return { blocks: mergeTinyBlocks(text, blocks, minChunkSize, sourceStarts) };
   } catch (error) {
     return {
       blocks: [],

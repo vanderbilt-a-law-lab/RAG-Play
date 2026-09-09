@@ -40,7 +40,11 @@ export const ChunkSizeInput = () => {
                   <HelpCircle className="h-4 w-4 text-muted-foreground" />
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Maximum number of characters in each parent chunk.</p>
+                  <p>
+                    Most characters allowed in a parent chunk. The model
+                    receives the whole parent when one of its small child
+                    chunks is a match.
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -64,8 +68,9 @@ export const ChunkSizeInput = () => {
             </TooltipTrigger>
             <TooltipContent>
               <p>
-                Maximum number of characters in each chunk. Larger chunks
-                preserve more context but may exceed token limits.
+                Most characters allowed in one chunk. Bigger chunks keep more
+                of the surrounding text together; smaller chunks are more
+                precise but lose context.
               </p>
             </TooltipContent>
           </Tooltip>

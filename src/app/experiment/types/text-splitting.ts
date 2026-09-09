@@ -31,11 +31,21 @@ export interface TextBlock {
   text: string;
 }
 
+export type CitatorStatus = "good" | "caution" | "negative" | "none";
+
+/** A citator-style flag for a source: is it still good law, and any caveat. */
+export interface CitatorFlag {
+  status: CitatorStatus;
+  label: string;
+  note: string;
+}
+
 /** Which corpus document a chunk was cut from, when that can be determined. */
 export interface BlockSource {
   index: number;
   title: string;
   shortTitle: string;
+  citator?: CitatorFlag;
 }
 
 export interface EnhancedTextBlock extends TextBlock {

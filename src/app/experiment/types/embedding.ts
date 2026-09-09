@@ -51,24 +51,38 @@ export type LangchainProgress = {
   total?: number;
 }
 
+/** Cross-encoder used by the rerank toggle. Scores (question, passage) pairs directly. */
+export const RERANKER_MODEL = "mixedbread-ai/mxbai-rerank-xsmall-v1";
+
 export type EmbeddingProgressMessage = {
   status: "loading" | "embedding" | "ready" | "error" | "complete";
   progress?: LangchainProgress;
   message?: string;
   output?: number[][][];
-  type?: "question" | "blocks";
+  /** Rerank results, one score per input passage, in order. */
+  scores?: number[];
+  type?: "question" | "blocks" | "rerank";
   /** Echo of the request id so stale results can be ignored. 0 = model load only. */
   requestId?: number;
 };
 
-export type EmbeddingTaskMessage = {
-  task: "feature-extraction";
-  model: EmbeddingModel;
-  type: "question" | "blocks";
-  text: string | string[];
-  /** Caller-assigned id, echoed back on completion. 0 = model load only. */
-  requestId: number;
-};
+export type EmbeddingTaskMessage =
+  | {
+      task: "feature-extraction";
+      model: EmbeddingModel;
+      type: "question" | "blocks";
+      text: string | string[];
+      /** Caller-assigned id, echoed back on completion. 0 = model load only. */
+      requestId: number;
+    }
+  | {
+      task: "rerank";
+      model: string;
+      type: "rerank";
+      query: string;
+      texts: string[];
+      requestId: number;
+    };
 
 export type UILoadingState = {
   status: "initiate" | "loading-model" | "error" | "loading-model-complete" | "embedding" | "idle";

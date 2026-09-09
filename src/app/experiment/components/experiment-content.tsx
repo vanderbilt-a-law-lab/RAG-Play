@@ -6,7 +6,10 @@ import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SplitSquareHorizontal, Boxes, Search, MessageSquare } from "lucide-react"
 import { useEmbeddingWorker } from "@/app/hooks/useEmbeddingWorker"
-import { useEmbeddingStore } from "@/app/stores/experiment/embedding-store"
+import {
+  RERANK_TOP_N,
+  useEmbeddingStore,
+} from "@/app/stores/experiment/embedding-store"
 import {
   DEFAULT_MIN_CHUNK_SIZE,
   useTextSplittingStore,
@@ -51,9 +54,13 @@ export function ExperimentContent() {
   } = useTextSplittingStore()
   const {
     model,
+    question,
     questionEmbedding,
     blocksEmbedding,
+    baseRanking,
+    rerankStatus,
     recalculateSimilarities,
+    resetRetrieval,
     setQuestion,
   } = useEmbeddingStore()
   const { setPresetUserMessage, setEffort } = useGenerationStore()
@@ -64,6 +71,19 @@ export function ExperimentContent() {
       recalculateSimilarities()
     }
   }, [questionEmbedding, blocksEmbedding, recalculateSimilarities])
+
+  // When the reranker is on, rescore the top of each new ranking.
+  const { requestRerank } = embeddingWorker
+  useEffect(() => {
+    if (rerankStatus !== "pending" || baseRanking.length === 0) {
+      return
+    }
+    const items = baseRanking
+      .slice(0, RERANK_TOP_N)
+      .map(({ index }) => ({ index, text: blocks[index]?.text ?? "" }))
+      .filter((item) => item.text.length > 0)
+    requestRerank(question, items)
+  }, [baseRanking, rerankStatus, blocks, question, requestRerank])
 
   const handleStepChange = useCallback(
     (nextStep: string) => {
@@ -89,6 +109,7 @@ export function ExperimentContent() {
         setParentChunkSize(scenario.parentChunkSize)
       }
       setQuestion(scenario.question)
+      resetRetrieval(scenario.retrieval)
       setPresetUserMessage(scenario.userMessage ?? null)
       if (scenario.effort) {
         setEffort(scenario.effort)
@@ -100,6 +121,7 @@ export function ExperimentContent() {
     [
       embeddingWorker,
       handleStepChange,
+      resetRetrieval,
       resetText,
       setChunkSize,
       setEffort,
