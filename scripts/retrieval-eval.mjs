@@ -61,9 +61,12 @@ console.log(`MODEL=${MODEL} POOL=${POOL} MIN=${MIN} PREFIX=${PREFIX ? "yes" : "n
 
 for (const [size, overlap] of SETTINGS) {
   const splitter = new RecursiveCharacterTextSplitter({ chunkSize: size, chunkOverlap: overlap, separators: ["\n\n", "\n", " "] });
-  const raw = await splitter.splitText(corpus);
-  let cursor = 0;
-  const chunks = raw.map((text, idx) => { const start = corpus.indexOf(text, cursor); cursor = start + 1; return { n: idx + 1, text, doc: docOf(start) }; });
+  // Each source is split on its own, as the app does, so no chunk spans two documents.
+  const segments = ranges.map((r, i) => ({ doc: docs[r.i - 1][0], text: corpus.slice(r.start, i + 1 < ranges.length ? ranges[i + 1].start : corpus.length) }));
+  const chunks = [];
+  for (const seg of segments) {
+    for (const text of await splitter.splitText(seg.text)) chunks.push({ n: chunks.length + 1, text, doc: seg.doc });
+  }
   const kept = mergeTiny(chunks, MIN);
   const vecs = [];
   for (const c of kept) vecs.push(await embed(c.text));
