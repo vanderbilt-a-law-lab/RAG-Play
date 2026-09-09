@@ -6,8 +6,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  EMBEDDING_MODELS,
+  EMBEDDING_MODEL_OPTIONS,
   EmbeddingModel,
+  getEmbeddingModelOption,
 } from "@/app/experiment/types/embedding";
 import { EMBEDDING_CONSTANTS } from "@/app/hooks";
 
@@ -17,8 +18,9 @@ interface ModelSelectorProps {
 }
 
 export function ModelSelector({ model, onModelChange }: ModelSelectorProps) {
+  const current = getEmbeddingModelOption(model);
   return (
-    <div className="flex items-center space-x-4">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       <span className="text-sm font-medium">Embedding Model:</span>
       <Select value={model} onValueChange={(value) => onModelChange(value as EmbeddingModel)}>
         <SelectTrigger
@@ -28,13 +30,14 @@ export function ModelSelector({ model, onModelChange }: ModelSelectorProps) {
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {EMBEDDING_MODELS.map((item) => (
-            <SelectItem key={item} value={item}>
-              {item}
+          {EMBEDDING_MODEL_OPTIONS.map((item) => (
+            <SelectItem key={item.id} value={item.id}>
+              {item.label}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
+      <span className="text-xs text-muted-foreground">{current.note}</span>
     </div>
   );
 }

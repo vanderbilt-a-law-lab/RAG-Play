@@ -5,6 +5,8 @@ import {
 } from "@/app/experiment/types/text-splitting";
 import { CORPUS_TEXT } from "@/app/experiment/constants/legal-corpus";
 
+export const DEFAULT_MIN_CHUNK_SIZE = 60;
+
 interface TextSplittingState {
   text: string;
   blocks: EnhancedTextBlock[];
@@ -12,6 +14,8 @@ interface TextSplittingState {
   parentChunkSize: number;
   chunkSize: number;
   overlap: number;
+  /** Chunks shorter than this are merged into the previous chunk. */
+  minChunkSize: number;
   textareaRef: React.RefObject<HTMLTextAreaElement> | null;
   hoveredChunkIndex: number | null;
   setText: (text: string) => void;
@@ -21,6 +25,7 @@ interface TextSplittingState {
   setParentChunkSize: (parentChunkSize: number) => void;
   setChunkSize: (size: number) => void;
   setOverlap: (overlap: number) => void;
+  setMinChunkSize: (minChunkSize: number) => void;
   setTextareaRef: (textareaRef: React.RefObject<HTMLTextAreaElement> | null) => void;
   setHoveredChunkIndex: (hoveredChunkIndex: number | null) => void;
 }
@@ -32,6 +37,7 @@ export const useTextSplittingStore = create<TextSplittingState>((set) => ({
   parentChunkSize: 1024,
   chunkSize: 500,
   overlap: 50,
+  minChunkSize: DEFAULT_MIN_CHUNK_SIZE,
   textareaRef: null,
   hoveredChunkIndex: null,
   setText: (text) => set({ text }),
@@ -41,6 +47,8 @@ export const useTextSplittingStore = create<TextSplittingState>((set) => ({
   setParentChunkSize: (parentChunkSize) => set({ parentChunkSize }),
   setChunkSize: (chunkSize) => set({ chunkSize }),
   setOverlap: (overlap) => set({ overlap }),
+  setMinChunkSize: (minChunkSize) =>
+    set({ minChunkSize: Math.max(0, Math.floor(minChunkSize) || 0) }),
   setTextareaRef: (textareaRef) => set({ textareaRef }),
   setHoveredChunkIndex: (hoveredChunkIndex) => set({ hoveredChunkIndex }),
 }));

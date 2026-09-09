@@ -17,6 +17,8 @@ import { ModelSelector } from "./embedding/ModelSelector";
 import { LoadingPanel } from "./embedding/LoadingPanel";
 import { EMBEDDING_CONSTANTS } from "@/app/hooks";
 import { embedTo2D } from "@/lib/utils";
+import type { EmbeddingModel } from "@/app/experiment/types/embedding";
+import { groupPointsBySource } from "@/app/experiment/utils/source-groups";
 
 interface EmbeddingTabProps {
   embeddingWorker: UseEmbeddingWorkerReturn;
@@ -49,15 +51,26 @@ export function EmbeddingTab({ embeddingWorker }: EmbeddingTabProps) {
         (point, index) => ({
           ...point,
           title: `Chunk ${index + 1}`,
+          details: blocks[index]
+            ? [
+                blocks[index].source?.shortTitle ?? "Source unknown",
+                blocks[index].text.replace(/\s+/g, " ").slice(0, 80),
+              ]
+            : undefined,
         })
       );
     } catch {
       return [];
     }
-  }, [blocksEmbedding]);
+  }, [blocksEmbedding, blocks]);
+
+  const sourceGroups = useMemo(
+    () => groupPointsBySource(embedding2d, blocks),
+    [embedding2d, blocks]
+  );
 
   const handleModelChange = (newModel: string) => {
-    setModel(newModel as "Snowflake/snowflake-arctic-embed-xs");
+    setModel(newModel as EmbeddingModel);
   };
 
   return (
@@ -100,6 +113,7 @@ export function EmbeddingTab({ embeddingWorker }: EmbeddingTabProps) {
             <div className="w-1/2">
               <LowVectorVisualization
                 data={embedding2d}
+                groups={sourceGroups}
                 title="Chunk Embedding Space"
                 datasetLabel="Chunks"
                 className="h-[400px]"
@@ -130,6 +144,12 @@ export function EmbeddingTab({ embeddingWorker }: EmbeddingTabProps) {
                 <li>
                   This view only plots document chunks, so it represents the
                   indexed knowledge base before a user query is embedded.
+                </li>
+                <li>
+                  Points are colored by source document. Chunks from the same
+                  document tend to sit together, which is one reason a search
+                  can pull several passages from one source and none from
+                  another.
                 </li>
               </ul>
             </div>

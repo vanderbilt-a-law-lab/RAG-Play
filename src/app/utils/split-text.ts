@@ -36,6 +36,35 @@ type SplitTextResult = {
   error?: Error;
 };
 
+/**
+ * Merge chunks shorter than `minChars` into the chunk before them (within the
+ * same parent for parent-child). Headings, section numbers, and sentence
+ * tails otherwise become their own chunks, and such fragments score well
+ * against almost any question.
+ */
+export const mergeTinyBlocks = (
+  text: string,
+  blocks: EnhancedTextBlock[],
+  minChars: number
+): EnhancedTextBlock[] => {
+  if (minChars <= 0) {
+    return blocks;
+  }
+  const merged: EnhancedTextBlock[] = [];
+  for (const block of blocks) {
+    const previous = merged[merged.length - 1];
+    const sameParent =
+      previous !== undefined && previous.parentId === block.parentId;
+    if (block.text.length < minChars && previous && sameParent) {
+      previous.endIndex = block.endIndex;
+      previous.text = text.slice(previous.startIndex, block.endIndex);
+    } else {
+      merged.push({ ...block });
+    }
+  }
+  return merged;
+};
+
 export const splitText = async (
   text: string,
   strategy: SplitStrategy,
@@ -44,12 +73,14 @@ export const splitText = async (
     overlap: number;
     separators: Separator | Separator[];
     parentChunkSize?: number;
+    minChunkSize?: number;
   }
 ): Promise<SplitTextResult> => {
   try {
     if (!text || text.trim().length === 0) {
       return { blocks: [] };
     }
+    const minChunkSize = options.minChunkSize ?? 0;
 
     const separatorList = getSeparatorList(options.separators);
     const splitterConfig = {
@@ -114,7 +145,7 @@ export const splitText = async (
           }
         }
 
-        return { blocks: allChildBlocks };
+        return { blocks: mergeTinyBlocks(text, allChildBlocks, minChunkSize) };
       }
       default:
         return {
@@ -125,18 +156,17 @@ export const splitText = async (
 
     const chunks = await splitter.splitText(text);
     let currentIndex = 0;
-    return {
-      blocks: chunks.map((chunk) => {
-        const startIndex = text.indexOf(chunk, currentIndex);
-        const endIndex = startIndex + chunk.length;
-        currentIndex = startIndex + 1;
-        return {
-          text: chunk,
-          startIndex,
-          endIndex,
-        };
-      }),
-    };
+    const blocks = chunks.map((chunk) => {
+      const startIndex = text.indexOf(chunk, currentIndex);
+      const endIndex = startIndex + chunk.length;
+      currentIndex = startIndex + 1;
+      return {
+        text: chunk,
+        startIndex,
+        endIndex,
+      };
+    });
+    return { blocks: mergeTinyBlocks(text, blocks, minChunkSize) };
   } catch (error) {
     return {
       blocks: [],

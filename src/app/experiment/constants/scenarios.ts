@@ -22,6 +22,8 @@ export interface Scenario {
   chunkSize: number;
   overlap: number;
   parentChunkSize?: number;
+  /** Chunks shorter than this merge into their neighbor. Default 60. */
+  minChunkSize?: number;
   /** Retrieval question (Semantic Search tab). */
   question: string;
   /** Message sent to the model, when it should differ from the retrieval question. */
@@ -49,14 +51,13 @@ export const SCENARIOS: Scenario[] = [
     id: "definition-split",
     title: "A defined term cut off from its definition",
     summary:
-      "Smaller chunks, no overlap. The engagement letter defines \"Verified Authority\" in Section 1 and uses the term in Section 7.",
+      "Smaller chunks, no overlap. Section 7 of the engagement letter says AI output is not a \"Verified Authority\"; Section 1 defines that term.",
     watchFor:
-      "Whether the passage that defines \"Verified Authority\" is among the retrieved passages. If it is not, the model answers about a term whose definition it cannot see.",
+      "The Section 7 passages are retrieved; the Section 1 definition of \"Verified Authority\" usually is not. The model then explains a term whose definition it cannot see. Try it in Context Generation.",
     strategy: "recursive-character",
     chunkSize: 250,
     overlap: 0,
-    question:
-      "Under the engagement letter, may the firm cite an authority that is not a Verified Authority?",
+    question: "May the firm cite output from a Generative AI Tool?",
     effort: "low",
     tab: "semantic-search",
   },
@@ -64,12 +65,12 @@ export const SCENARIOS: Scenario[] = [
     id: "same-word",
     title: "Same word, different doctrine",
     summary:
-      "\"Notice\" means one thing in Rule 11 (notice before sanctions) and another in the engagement letter (where to send letters).",
+      "\"Notice\" means one thing in Rule 11 (notice before sanctions) and another in the engagement letter (how to deliver a letter).",
     watchFor:
-      "The ranked passages mix both meanings. A similarity score measures wording, not which body of law you are asking about.",
+      "The top passages mix both meanings, with the engagement letter's Notices clause usually first. A similarity score measures wording, not which body of law you are asking about.",
     strategy: "recursive-character",
-    chunkSize: 500,
-    overlap: 50,
+    chunkSize: 300,
+    overlap: 0,
     question: "What notice is required?",
     effort: "low",
     tab: "semantic-search",

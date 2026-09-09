@@ -169,6 +169,8 @@ Optional:
 - This is a RAG (Retrieval-Augmented Generation) teaching tool for law students; copy must stay plain (no practice jargon)
 - The corpus lives in `src/app/experiment/constants/legal-corpus.ts`; chunks are traced to documents by the `=== SOURCE n: title ===` header lines
 - Scenarios (class presets) live in `src/app/experiment/constants/scenarios.ts`
+- Embedding models are declared in `src/app/experiment/types/embedding.ts` (pooling + query prefix per model); the worker applies the prefix to questions only
+- `scripts/retrieval-eval.mjs` replicates retrieval offline; run it before changing the corpus, splitter defaults, or scenarios
 - Generation streams newline-delimited JSON events (`thinking`, `text`, `done`, `error`) from `/api/generate`; the client hook is `src/app/hooks/useGeneration.ts`
 - Do not call Claude through any provider shim; use `@anthropic-ai/sdk` directly
 - Uses Web Workers for heavy computation (embedding generation)

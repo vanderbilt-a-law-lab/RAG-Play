@@ -9,6 +9,7 @@ import {
 import { SeparatorManager } from "@/app/experiment/components/separator-manager";
 import { ChunkSizeInput } from "@/app/experiment/components/text-splitting/ChunkSizeInput";
 import { OverlapSizeInput } from "@/app/experiment/components/text-splitting/OverlapSizeInput";
+import { MinChunkSizeInput } from "@/app/experiment/components/text-splitting/MinChunkSizeInput";
 import { SourceDocumentInput } from "@/app/experiment/components/text-splitting/SourceDocumentInput";
 import { GeneratedChunks } from "@/app/experiment/components/text-splitting/GeneratedChunks";
 
@@ -67,9 +68,10 @@ export function TextSplittingTab() {
           <span className="text-sm font-medium">Split Strategy:</span>
           <StrategySelector />
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <ChunkSizeInput />
           <OverlapSizeInput />
+          <MinChunkSizeInput />
         </div>
 
         <SeparatorManager />

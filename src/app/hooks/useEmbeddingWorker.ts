@@ -60,6 +60,8 @@ export function useEmbeddingWorker({
     question: LOAD_ONLY_REQUEST_ID,
   });
   const pendingBlockTextsRef = useRef<string[] | null>(null);
+  const blocksRef = useRef(blocks);
+  blocksRef.current = blocks;
 
   const postTask = useCallback(
     (type: "question" | "blocks", texts: string[]): void => {
@@ -203,6 +205,10 @@ export function useEmbeddingWorker({
     workerRef.current = worker;
     modelReadyRef.current = false;
     setWorker(worker);
+    // A new model must re-embed whatever chunks are already on screen.
+    pendingBlockTextsRef.current = blocksRef.current
+      .map((block) => block.text)
+      .filter((t) => t.length > 0);
 
     const loadModelMessage: EmbeddingTaskMessage = {
       task: "feature-extraction",

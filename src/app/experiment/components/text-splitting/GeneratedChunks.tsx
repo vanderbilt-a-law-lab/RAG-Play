@@ -26,6 +26,7 @@ export const GeneratedChunks = () => {
     chunkSize,
     overlap,
     parentChunkSize,
+    minChunkSize,
     setBlocks,
     setHoveredChunkIndex,
   } = useTextSplittingStore();
@@ -111,6 +112,7 @@ export const GeneratedChunks = () => {
         overlap,
         separators,
         parentChunkSize,
+        minChunkSize,
       });
       if (error) {
         throw error;
@@ -143,7 +145,15 @@ export const GeneratedChunks = () => {
 
   useEffect(() => {
     debouncedSplitText();
-  }, [debouncedSplitText, text, strategy, chunkSize, overlap, parentChunkSize]);
+  }, [
+    debouncedSplitText,
+    text,
+    strategy,
+    chunkSize,
+    overlap,
+    parentChunkSize,
+    minChunkSize,
+  ]);
 
   const overlapStats = useMemo(() => {
     return {

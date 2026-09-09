@@ -1,129 +1,108 @@
-import { pipeline, PipelineType, Tensor } from "@huggingface/transformers";
-import { EmbeddingModel, EmbeddingTaskMessage } from "../types/embedding";
 import {
+  pipeline,
+  Tensor,
   FeatureExtractionPipeline,
   ProgressInfo,
 } from "@huggingface/transformers";
-import { EmbeddingProgressMessage } from "../types/embedding";
+import {
+  EmbeddingProgressMessage,
+  EmbeddingTaskMessage,
+  getEmbeddingModelOption,
+} from "../types/embedding";
 
-// Use the Singleton pattern to enable lazy construction of the pipeline.
-class PipelineSingleton {
-  static task: PipelineType = "feature-extraction";
-  static model: EmbeddingModel = "Snowflake/snowflake-arctic-embed-xs";
-  static instance: FeatureExtractionPipeline | null = null;
+// One pipeline per model id, created lazily and kept for the worker's life.
+const pipelines = new Map<string, Promise<FeatureExtractionPipeline>>();
 
-  static async getInstance(
-    progress_callback_fn: (x: EmbeddingProgressMessage) => void
-  ) {
-    if (!this.instance) {
-      let message: EmbeddingProgressMessage = {
-        status: "loading",
-        message: "Model loading started",
-      };
-      progress_callback_fn(message);
-
-      this.instance = (await pipeline(this.task, this.model, {
-        progress_callback: (progress: ProgressInfo) => {
-          if (progress.status === "progress") {
-            message = {
-              status: "loading",
-              progress: progress,
-              message: "Model loading in progress",
-            };
-            progress_callback_fn(message);
-          }
-        },
-      })) as FeatureExtractionPipeline;
-
-      message = { status: "ready", message: "Model ready" };
-      progress_callback_fn(message);
-    }
-    return this.instance;
+const getPipeline = (
+  model: string,
+  report: (message: EmbeddingProgressMessage) => void
+): Promise<FeatureExtractionPipeline> => {
+  const existing = pipelines.get(model);
+  if (existing) {
+    return existing;
   }
-}
+  report({ status: "loading", message: "Model loading started" });
+  const created = (
+    pipeline("feature-extraction", model, {
+      progress_callback: (progress: ProgressInfo) => {
+        if (progress.status === "progress") {
+          report({
+            status: "loading",
+            progress,
+            message: "Model loading in progress",
+          });
+        }
+      },
+    }) as Promise<FeatureExtractionPipeline>
+  ).then((instance) => {
+    report({ status: "ready", message: "Model ready" });
+    return instance;
+  });
+  pipelines.set(model, created);
+  return created;
+};
 
-// Add new helper function for batch processing
-async function processBatchEmbeddings(
+async function embedMany(
   task: FeatureExtractionPipeline,
-  texts: string[]
+  texts: string[],
+  pooling: "cls" | "mean"
 ): Promise<Tensor[]> {
-  const totalBlocks = texts.length;
   const output: Tensor[] = [];
-
-  for (let i = 0; i < totalBlocks; i++) {
-    const result = await task(texts[i], {
-      normalize: true,
-      pooling: "cls",
-    });
-    output.push(result);
-
+  for (let i = 0; i < texts.length; i++) {
+    output.push(await task(texts[i], { normalize: true, pooling }));
     self.postMessage({
       status: "embedding",
       progress: {
         name: "text-blocks",
         status: "loading",
-        progress: Math.round(((i + 1) / totalBlocks) * 100),
+        progress: Math.round(((i + 1) / texts.length) * 100),
       },
-      message: `Processing block ${i + 1}/${totalBlocks}`,
+      message: `Processing block ${i + 1}/${texts.length}`,
     } as EmbeddingProgressMessage);
   }
-
   return output;
 }
 
-// Main message handler
 self.addEventListener(
   "message",
   async (event: MessageEvent<EmbeddingTaskMessage>) => {
-
+    const { task: taskName, model, type, text, requestId } = event.data;
     try {
-      if (!event.data.task) {
-        throw new Error("No task specified");
+      if (taskName !== "feature-extraction") {
+        throw new Error(`Invalid task: ${taskName}`);
       }
 
-      if (event.data.task !== "feature-extraction") {
-        throw new Error(`Invalid task: ${event.data.task}`);
-      }
+      const option = getEmbeddingModelOption(model);
+      const task = await getPipeline(model, (m) => self.postMessage(m));
 
-      // Load model first (so "ready" is sent); then for empty input just respond with empty output
-      const task = await PipelineSingleton.getInstance(
-        (x: EmbeddingProgressMessage) => {
-          self.postMessage(x);
-        }
-      );
-
-      if (!task) {
-        throw new Error("Failed to initialize pipeline");
-      }
-
-      if (!event.data.text || event.data.text.length === 0) {
+      const texts = Array.isArray(text) ? text : [text];
+      if (texts.length === 0) {
         self.postMessage({
           status: "complete",
-          type: event.data.type,
-          requestId: event.data.requestId,
+          type,
+          requestId,
           output: [],
         } as EmbeddingProgressMessage);
         return;
       }
 
-      const output: Tensor | Tensor[] = Array.isArray(event.data.text)
-        ? await processBatchEmbeddings(task, event.data.text)
-        : await task(event.data.text, { normalize: true, pooling: "cls" });
+      // Questions get the model's search prefix; passages are embedded as-is.
+      const prepared =
+        type === "question" ? texts.map((t) => option.queryPrefix + t) : texts;
+      const output = await embedMany(task, prepared, option.pooling);
 
       self.postMessage({
         status: "complete",
-        type: event.data.type,
-        requestId: event.data.requestId,
-        output: Array.isArray(output)
-          ? output.map((o) => o.tolist())
-          : [output.tolist()],
+        type,
+        requestId,
+        output: output.map((o) => o.tolist()),
       } as EmbeddingProgressMessage);
     } catch (error) {
       console.error("Worker error:", error);
       self.postMessage({
         status: "error",
-        type: event.data.type,
-        requestId: event.data.requestId,
+        type,
+        requestId,
         message: error instanceof Error ? error.message : String(error),
       } as EmbeddingProgressMessage);
     }

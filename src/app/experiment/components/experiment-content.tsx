@@ -7,7 +7,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SplitSquareHorizontal, Boxes, Search, MessageSquare } from "lucide-react"
 import { useEmbeddingWorker } from "@/app/hooks/useEmbeddingWorker"
 import { useEmbeddingStore } from "@/app/stores/experiment/embedding-store"
-import { useTextSplittingStore } from "@/app/stores/experiment/text-splitting-store"
+import {
+  DEFAULT_MIN_CHUNK_SIZE,
+  useTextSplittingStore,
+} from "@/app/stores/experiment/text-splitting-store"
 import { useGenerationStore } from "@/app/stores/experiment/generation-store"
 import type { Scenario } from "@/app/experiment/constants/scenarios"
 import { ScenarioPicker } from "./scenario-picker"
@@ -44,6 +47,7 @@ export function ExperimentContent() {
     setChunkSize,
     setOverlap,
     setParentChunkSize,
+    setMinChunkSize,
   } = useTextSplittingStore()
   const {
     model,
@@ -80,6 +84,7 @@ export function ExperimentContent() {
       setStrategy(scenario.strategy)
       setChunkSize(scenario.chunkSize)
       setOverlap(scenario.overlap)
+      setMinChunkSize(scenario.minChunkSize ?? DEFAULT_MIN_CHUNK_SIZE)
       if (scenario.parentChunkSize) {
         setParentChunkSize(scenario.parentChunkSize)
       }
@@ -98,6 +103,7 @@ export function ExperimentContent() {
       resetText,
       setChunkSize,
       setEffort,
+      setMinChunkSize,
       setOverlap,
       setParentChunkSize,
       setPresetUserMessage,

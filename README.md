@@ -12,6 +12,8 @@ Built by the [Vanderbilt AI Law Lab](https://www.vanderbilt.edu/ai-law-lab/) for
 - **Errors are visible.** If the model call fails (no API key, rate limit, retired model, refusal), the Generation tab says so instead of sitting on a spinner.
 - **Class code and rate limit.** An optional `ACCESS_CODE` gates the model call, and each connection is limited to a few requests per minute.
 - **Re-embedding is reliable.** Changing the splitting strategy or the source text re-embeds the chunks and the current question, so the ranking always refers to the chunks on screen.
+- **Retrieval that behaves.** The default embedding model (Snowflake arctic-embed) is trained to expect a search prefix on questions; the original code never added it, so short fragments such as a bare "III" outranked real passages. Questions now get the prefix, chunks shorter than a configurable minimum are merged into their neighbor, and a second model (all-MiniLM-L6-v2) can be selected to compare rankings. Semantic Search shows the score spread (best, median, worst), the source mix of the top ten, and a scatter plot colored by source.
+- **An offline retrieval harness.** `node scripts/retrieval-eval.mjs` runs the same splitter and embedding model over the corpus and prints the top passages for a set of legal questions, so corpus or settings changes can be checked without a browser. Env vars: `MODEL`, `POOL`, `MIN`, `PREFIX`, `SETTINGS`, `QUERIES`, `TOPN`.
 
 ## Tech stack
 
