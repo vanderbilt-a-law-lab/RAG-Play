@@ -15,7 +15,7 @@ export function EmbeddingDisplay({
   return (
     <div className="space-y-2">
       <label className="text-sm font-medium">
-        Ask a question to find similar content:
+        Type a question. The search runs as you type:
       </label>
       <Textarea
         value={question}
@@ -36,7 +36,7 @@ export function EmbeddingDisplay({
               ...]
             </p>
             <p className="text-xs text-muted-foreground">
-              Question embedding • {questionEmbedding[0].length} dimensions
+              Your question as a list of numbers • {questionEmbedding[0].length} numbers (showing the first 8)
             </p>
           </div>
         </div>

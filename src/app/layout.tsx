@@ -18,32 +18,40 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "RAG Playground - Interactive RAG Pipeline Visualization",
+  title: "Legal RAG Playground",
   description:
-    "An interactive tool for visualizing and understanding Retrieval-Augmented Generation (RAG) pipelines. Explore text splitting, vector embeddings, semantic search, and context generation in real-time.",
+    "A teaching tool for law students: watch each step of a retrieval-augmented generation (RAG) pipeline run over real legal sources, from text splitting to retrieval to the model's answer.",
   keywords: [
     "RAG",
     "Retrieval-Augmented Generation",
-    "LLM",
+    "legal research",
+    "legal AI",
+    "hallucination",
     "Vector Embeddings",
     "Semantic Search",
     "Text Splitting",
-    "AI",
-    "Machine Learning",
-    "NLP",
+    "law school",
   ],
-  authors: [{ name: "Kain" }],
+  authors: [{ name: "Vanderbilt AI Law Lab" }, { name: "Kain (RAG-Play)" }],
   openGraph: {
-    title: "RAG Playground",
-    description: "Interactive RAG Pipeline Visualization Tool",
+    title: "Legal RAG Playground",
+    description:
+      "Watch each step of a RAG pipeline run over real legal sources.",
     type: "website",
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "RAG Playground",
-    description: "Interactive RAG Pipeline Visualization Tool",
+    title: "Legal RAG Playground",
+    description:
+      "Watch each step of a RAG pipeline run over real legal sources.",
   },
+  // Rendered through the metadata API rather than a hand-written <head>, so an
+  // empty or missing value produces no tag at all. A literal "" inside <head>
+  // broke hydration on Vercel with React error #329.
+  ...(AppConfig.googleSiteVerificationId
+    ? { verification: { google: AppConfig.googleSiteVerificationId } }
+    : {}),
 };
 
 export default function RootLayout({
@@ -53,15 +61,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <head>
-        {/* Google Search Console Verification */}
-        {AppConfig.googleSiteVerificationId && (
-          <meta
-            name="google-site-verification"
-            content={AppConfig.googleSiteVerificationId}
-          />
-        )}
-      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

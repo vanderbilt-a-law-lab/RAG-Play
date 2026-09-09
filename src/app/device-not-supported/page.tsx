@@ -9,7 +9,7 @@ export default function DeviceNotSupportedPage() {
         <div className="flex flex-col items-center justify-center text-center space-y-4">
           <h1 className="text-2xl font-bold tracking-tight text-center">Mobile Device Not Supported</h1>
           <p className="text-muted-foreground max-w-md text-center">
-            RAG Playground is currently only available on desktop devices. Please switch to a desktop device for the best experience.
+            Legal RAG Playground runs a small AI model inside your browser, which phones and tablets cannot do. Please open it on a laptop or desktop.
           </p>
         </div>
       </main>

@@ -29,10 +29,11 @@ export function SeparatorManager() {
                 <HelpCircle className="h-4 w-4 text-muted-foreground" />
               </TooltipTrigger>
               <TooltipContent>
-                <p>Custom separators to use for text splitting.</p>
+                <p>Where the splitter is allowed to cut.</p>
                 <p className="mb-2">
-                  Split paragraphs in order by using separators and merge
-                  smaller chunks according to the overlap size.
+                  It tries the first separator (blank lines) and moves down
+                  the list only when a piece is still longer than the chunk
+                  size.
                 </p>
                 <span className="font-mono">¶ means line break</span>
                 <br />

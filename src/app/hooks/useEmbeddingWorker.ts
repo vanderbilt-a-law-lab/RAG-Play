@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 import {
   EmbeddingModel,
@@ -8,8 +8,8 @@ import {
   UIFileProgress,
 } from "@/app/experiment/types/embedding";
 import { useEmbeddingStore } from "@/app/stores/experiment/embedding-store";
+import { RERANKER_MODEL } from "@/app/experiment/types/embedding";
 import { EMBEDDING_CONSTANTS } from "./useEmbeddingConstants";
-import { DEFAULT_QUESTION } from "@/app/experiment/constants/embedding";
 
 interface UseEmbeddingWorkerProps {
   blocks: { text: string }[];
@@ -23,11 +23,22 @@ export interface UseEmbeddingWorkerReturn {
   loadingProgress: number;
   isLoadingExpanded: boolean;
   setIsLoadingExpanded: (expanded: boolean) => void;
-  question: string;
-  setQuestion: (question: string) => void;
+  /** Embed a question (debounced). Pass nothing to re-embed the current chunks. */
   debouncedGetEmbedding: (question?: string) => void;
+  /** Score (question, passage) pairs with the reranker; results land in the store. */
+  requestRerank: (question: string, items: { index: number; text: string }[]) => void;
 }
 
+const LOAD_ONLY_REQUEST_ID = 0;
+
+/**
+ * Owns the embedding web worker.
+ *
+ * One worker per model. Whenever the chunks change, they are re-embedded and
+ * the current question is embedded again afterwards, so the similarity
+ * ranking always refers to the chunks on screen. Each request carries an id;
+ * results from superseded requests are dropped.
+ */
 export function useEmbeddingWorker({
   blocks,
   model,
@@ -43,199 +54,267 @@ export function useEmbeddingWorker({
   >(new Map());
   const [embeddingProgress, setEmbeddingProgress] = useState<number>(0);
   const [isLoadingExpanded, setIsLoadingExpanded] = useState(true);
-  const [question, setQuestion] = useState("");
 
   const workerRef = useRef<Worker | null>(null);
-  const autoComputeRef = useRef<{ enabled: boolean; blocksDone: boolean }>({
-    enabled: false,
-    blocksDone: false,
+  const modelReadyRef = useRef(false);
+  const requestCounterRef = useRef(LOAD_ONLY_REQUEST_ID);
+  const latestRequestRef = useRef<{ blocks: number; question: number; rerank: number }>({
+    blocks: LOAD_ONLY_REQUEST_ID,
+    question: LOAD_ONLY_REQUEST_ID,
+    rerank: LOAD_ONLY_REQUEST_ID,
   });
+  const rerankIndexesRef = useRef<Map<number, number[]>>(new Map());
+  const pendingBlockTextsRef = useRef<string[] | null>(null);
+  const blocksRef = useRef(blocks);
+  blocksRef.current = blocks;
 
-  const calculateOverallProgress = useCallback(() => {
-    if (fileProgresses.size === 0) return 0;
-
-    let total = 0;
-    fileProgresses.forEach((file) => {
-      total += file.status === "done" ? 100 : file.progress;
-    });
-
-    return Math.round(total / fileProgresses.size);
-  }, [fileProgresses]); // Used by parent component
-
-  const handleWorkerMessage = useCallback(
-    (event: MessageEvent<EmbeddingProgressMessage>) => {
-      const { status, progress, message, output, type } = event.data;
-
-      if (status === "loading" && progress?.file) {
-        setLoadingState({
-          status: "loading-model",
-          progress,
-        });
-
-          const filename = progress.file;
-          setFileProgresses((prev) => {
-            const newFileProgresses = new Map(prev);
-            if (progress?.status === "done") {
-              newFileProgresses.set(filename, {
-                filename,
-                progress: 100,
-                status: "done",
-              });
-            } else {
-              newFileProgresses.set(filename, {
-                filename,
-                progress: progress?.progress || 0,
-                status: "loading",
-              });
-            }
-            return newFileProgresses;
-          });
-      } else if (status === "embedding") {
-        setLoadingState({ status: "embedding" });
-        setEmbeddingProgress(progress?.progress || 0);
-      } else if (status === "ready") {
-        setLoadingState({ status: "loading-model-complete" });
-
-        // Auto-compute embeddings for existing blocks when model is ready
-        if (!autoComputeRef.current.enabled && blocks.length > 0 && workerRef.current) {
-          autoComputeRef.current.enabled = true;
-          const textBlocks = blocks
-            .map((block) => block.text)
-            .filter((block) => block.length > 0);
-
-          if (textBlocks.length > 0) {
-            const message: EmbeddingTaskMessage = {
-              task: "feature-extraction",
-              model,
-              text: textBlocks,
-              type: "blocks",
-            };
-            workerRef.current.postMessage(message);
-            setLoadingState({ status: "embedding" });
-          }
-        }
-      } else if (status === "complete" && output) {
-        if (type === "question") {
-          setQuestionEmbedding(output[0]);
-        } else {
-          setBlocksEmbedding(output);
-
-          // Auto-compute question embedding after blocks are done (for similarity calculation)
-          if (autoComputeRef.current.enabled && !autoComputeRef.current.blocksDone && workerRef.current) {
-            autoComputeRef.current.blocksDone = true;
-            const questionMessage: EmbeddingTaskMessage = {
-              task: "feature-extraction",
-              model,
-              text: DEFAULT_QUESTION,
-              type: "question",
-            };
-            workerRef.current.postMessage(questionMessage);
-            setLoadingState({ status: "embedding" });
-          }
-        }
-        setLoadingState({ status: "idle" });
-      } else if (status === "error") {
-        setBlocksEmbedding([]);
-        setLoadingState({
-          status: "error",
-          error: message,
-        });
-      }
-    },
-    [setQuestionEmbedding, setBlocksEmbedding, blocks, model]
-  );
-
-  const debouncedGetEmbedding = useDebouncedCallback(
-    (questionText: string = "") => {
+  const postTask = useCallback(
+    (type: "question" | "blocks", texts: string[]): void => {
       if (!workerRef.current) {
         return;
       }
-
+      requestCounterRef.current += 1;
+      const requestId = requestCounterRef.current;
+      latestRequestRef.current[type] = requestId;
+      const message: EmbeddingTaskMessage = {
+        task: "feature-extraction",
+        model,
+        type,
+        text: texts,
+        requestId,
+      };
+      workerRef.current.postMessage(message);
       setLoadingState({ status: "embedding" });
+      setEmbeddingProgress(0);
+    },
+    [model]
+  );
 
-      const textBlocks =
-        questionText.length > 0
-          ? [questionText]
-          : blocks
-              .map((block) => block.text)
-              .filter((block) => block.length > 0);
+  const embedQuestion = useCallback(
+    (question: string): void => {
+      if (!question.trim()) {
+        return;
+      }
+      postTask("question", [question]);
+    },
+    [postTask]
+  );
 
-      if (textBlocks.length === 0) {
+  const embedBlocks = useCallback(
+    (texts: string[]): void => {
+      if (texts.length === 0) {
         setBlocksEmbedding([]);
+        useEmbeddingStore.getState().clearSemanticSearch();
+        return;
+      }
+      if (!modelReadyRef.current) {
+        pendingBlockTextsRef.current = texts;
+        return;
+      }
+      postTask("blocks", texts);
+    },
+    [postTask, setBlocksEmbedding]
+  );
+
+  const requestRerank = useCallback(
+    (question: string, items: { index: number; text: string }[]): void => {
+      if (!workerRef.current || items.length === 0 || !question.trim()) {
+        return;
+      }
+      requestCounterRef.current += 1;
+      const requestId = requestCounterRef.current;
+      latestRequestRef.current.rerank = requestId;
+      rerankIndexesRef.current.set(requestId, items.map((item) => item.index));
+      const message: EmbeddingTaskMessage = {
+        task: "rerank",
+        model: RERANKER_MODEL,
+        type: "rerank",
+        query: question,
+        texts: items.map((item) => item.text),
+        requestId,
+      };
+      workerRef.current.postMessage(message);
+      setLoadingState({ status: "embedding" });
+    },
+    []
+  );
+
+  const handleWorkerMessage = useCallback(
+    (event: MessageEvent<EmbeddingProgressMessage>): void => {
+      const { status, progress, message, output, type, requestId, scores } =
+        event.data;
+
+      if (type === "rerank" && (status === "complete" || status === "error")) {
+        const indexes = requestId !== undefined ? rerankIndexesRef.current.get(requestId) : undefined;
+        if (requestId !== undefined) rerankIndexesRef.current.delete(requestId);
+        if (requestId !== latestRequestRef.current.rerank) {
+          return; // superseded
+        }
+        setLoadingState({ status: "idle" });
+        if (status === "error" || !indexes || !scores) {
+          useEmbeddingStore.getState().markRerankFailed();
+          return;
+        }
+        useEmbeddingStore
+          .getState()
+          .applyRerank(indexes.map((index, i) => ({ index, score: scores[i] })));
+        return;
+      }
+
+      if (status === "loading" && progress?.file) {
+        setLoadingState({ status: "loading-model", progress });
+        const filename = progress.file;
+        setFileProgresses((prev) => {
+          const next = new Map(prev);
+          next.set(filename, {
+            filename,
+            progress: progress.status === "done" ? 100 : progress.progress || 0,
+            status: progress.status === "done" ? "done" : "loading",
+          });
+          return next;
+        });
+        return;
+      }
+
+      if (status === "ready") {
+        modelReadyRef.current = true;
+        setLoadingState({ status: "loading-model-complete" });
+        const pending = pendingBlockTextsRef.current;
+        pendingBlockTextsRef.current = null;
+        if (pending && pending.length > 0) {
+          postTask("blocks", pending);
+        }
+        return;
+      }
+
+      if (status === "embedding") {
+        setLoadingState({ status: "embedding" });
+        setEmbeddingProgress(progress?.progress || 0);
+        return;
+      }
+
+      if (status === "complete") {
+        if (requestId === LOAD_ONLY_REQUEST_ID || requestId === undefined) {
+          setLoadingState({ status: "idle" });
+          return;
+        }
+        const taskType = type ?? "blocks";
+        if (requestId !== latestRequestRef.current[taskType]) {
+          return; // superseded by a newer request
+        }
+        if (taskType === "question") {
+          setQuestionEmbedding(output?.[0] ?? []);
+        } else {
+          setBlocksEmbedding(output ?? []);
+          const currentQuestion = useEmbeddingStore.getState().question;
+          if (currentQuestion.trim()) {
+            postTask("question", [currentQuestion]);
+            return;
+          }
+        }
         setLoadingState({ status: "idle" });
         return;
       }
 
-      const message: EmbeddingTaskMessage = {
-        task: "feature-extraction",
-        model,
-        text: textBlocks,
-        type: questionText.length > 0 ? "question" : "blocks",
-      };
+      if (status === "error") {
+        setLoadingState({ status: "error", error: message });
+      }
+    },
+    [postTask, setBlocksEmbedding, setQuestionEmbedding]
+  );
 
-      workerRef.current.postMessage(message);
+  const handlerRef = useRef(handleWorkerMessage);
+  useEffect(() => {
+    handlerRef.current = handleWorkerMessage;
+  }, [handleWorkerMessage]);
+
+  // One worker per model; the message handler is read through a ref so the
+  // worker is not recreated when React re-renders.
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const worker = new Worker(
+      new URL("../experiment/workers/embedding.ts", import.meta.url),
+      { type: "module" }
+    );
+    worker.onmessage = (event: MessageEvent<EmbeddingProgressMessage>) => {
+      handlerRef.current(event);
+    };
+    worker.onerror = () => {
+      setLoadingState({
+        status: "error",
+        error: "The embedding worker failed to start.",
+      });
+    };
+    workerRef.current = worker;
+    modelReadyRef.current = false;
+    setWorker(worker);
+    // A new model must re-embed whatever chunks are already on screen.
+    pendingBlockTextsRef.current = blocksRef.current
+      .map((block) => block.text)
+      .filter((t) => t.length > 0);
+
+    const loadModelMessage: EmbeddingTaskMessage = {
+      task: "feature-extraction",
+      model,
+      text: [],
+      type: "blocks",
+      requestId: LOAD_ONLY_REQUEST_ID,
+    };
+    worker.postMessage(loadModelMessage);
+
+    return () => {
+      worker.terminate();
+      if (workerRef.current === worker) {
+        workerRef.current = null;
+      }
+      setWorker(null);
+    };
+  }, [model, setWorker]);
+
+  const debouncedEmbedBlocks = useDebouncedCallback((texts: string[]) => {
+    embedBlocks(texts);
+  }, 200);
+
+  // Re-embed whenever the chunks change.
+  useEffect(() => {
+    const texts = blocks.map((block) => block.text).filter((t) => t.length > 0);
+    debouncedEmbedBlocks(texts);
+  }, [blocks, debouncedEmbedBlocks]);
+
+  const debouncedGetEmbedding = useDebouncedCallback(
+    (question: string = "") => {
+      if (question.length > 0) {
+        embedQuestion(question);
+        return;
+      }
+      const texts = blocks
+        .map((block) => block.text)
+        .filter((t) => t.length > 0);
+      embedBlocks(texts);
     },
     EMBEDDING_CONSTANTS.DEBOUNCE_MS
   );
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    if (!workerRef.current) {
-      const newWorker = new Worker(
-        new URL("../experiment/workers/embedding.ts", import.meta.url),
-        { type: "module" }
-      );
-
-      newWorker.onmessage = handleWorkerMessage;
-
-      newWorker.onerror = () => {
-        setLoadingState({
-          status: "error",
-          error: "Worker initialization failed",
-        });
-      };
-
-      workerRef.current = newWorker;
-      setWorker(newWorker);
-
-      // Trigger model loading immediately after worker creation
-      const loadModelMessage: EmbeddingTaskMessage = {
-        task: "feature-extraction",
-        model,
-        text: [],
-        type: "blocks",
-      };
-      newWorker.postMessage(loadModelMessage);
-
-      // Reset auto-compute flag for new worker
-      autoComputeRef.current = { enabled: false, blocksDone: false };
-    }
-
-    return () => {
-      workerRef.current = null;
-    };
-  }, [model, handleWorkerMessage, setWorker, blocks, debouncedGetEmbedding]);
-
-  useEffect(() => {
-    return () => {
-      if (workerRef.current) {
-        workerRef.current.terminate();
-        workerRef.current = null;
-        setWorker(null);
-      }
-    };
-  }, [setWorker]);
+  const loadingProgress = (() => {
+    if (fileProgresses.size === 0) return 0;
+    let total = 0;
+    fileProgresses.forEach((file) => {
+      total += file.status === "done" ? 100 : file.progress;
+    });
+    return Math.round(total / fileProgresses.size);
+  })();
 
   return {
     loadingState,
     fileProgresses,
     embeddingProgress,
-    loadingProgress: calculateOverallProgress(),
+    loadingProgress,
     isLoadingExpanded,
     setIsLoadingExpanded,
-    question,
-    setQuestion,
     debouncedGetEmbedding,
+    requestRerank,
   };
 }

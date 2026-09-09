@@ -27,10 +27,10 @@ export function LoadingPanel({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">
-            {loadingState.status === "loading-model" && "Loading model..."}
+            {loadingState.status === "loading-model" && "Downloading the model to your browser (once, about 25 MB)..."}
             {["idle", "embedding", "loading-model-complete"].includes(
               loadingState.status
-            ) && "Model loaded"}
+            ) && "Model ready"}
             {loadingState.status === "error" && "Error"}
           </span>
           {["idle", "embedding", "loading-model-complete"].includes(

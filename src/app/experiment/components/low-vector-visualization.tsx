@@ -22,15 +22,18 @@ const nearestNeighborsPlugin: Plugin<"scatter"> = {
   id: "nearestNeighbors",
   afterDraw: (chart) => {
     const { ctx, scales } = chart;
-    const queryDataset = chart.data.datasets[1];
-    const vectorsDataset = chart.data.datasets[0];
+    // The query is always the last dataset; every other dataset holds chunks.
+    const datasets = chart.data.datasets;
+    const queryDataset = datasets.length > 1 ? datasets[datasets.length - 1] : undefined;
+    const vectors = datasets
+      .slice(0, -1)
+      .flatMap((dataset) => dataset.data as Vector[]);
 
-    if (!queryDataset?.data[0] || !vectorsDataset?.data.length) {
+    if (!queryDataset?.data[0] || vectors.length === 0) {
       return;
     }
 
     const query = queryDataset.data[0] as Vector;
-    const vectors = vectorsDataset.data as Vector[];
 
     // Calculate distances and find 5 nearest neighbors
     const nearestPoints = vectors
@@ -77,8 +80,17 @@ ChartJS.register(
   nearestNeighborsPlugin
 );
 
+const toPoints = (points: Vector[]) =>
+  points.map((point) => ({
+    x: point.x,
+    y: point.y,
+    title: point.title,
+    details: point.details,
+  }));
+
 const LowVectorVisualization: FC<LowVectorVisualizationProps> = ({
   data,
+  groups,
   query,
   title = "Low Vector Visualization",
   datasetLabel = "Vectors",
@@ -86,20 +98,24 @@ const LowVectorVisualization: FC<LowVectorVisualizationProps> = ({
   className,
 }) => {
   const chartData = useMemo(() => {
-    const datasets = [
-      {
-        label: datasetLabel,
-        data: data.map((point) => ({
-          x: point.x,
-          y: point.y,
-          title: point.title,
-          details: point.details,
-        })),
-        backgroundColor: "rgba(75, 192, 192, 0.6)",
-        pointRadius: 6,
-        pointHoverRadius: 8,
-      },
-    ];
+    const datasets =
+      groups && groups.length > 0
+        ? groups.map((group) => ({
+            label: group.label,
+            data: toPoints(group.data),
+            backgroundColor: group.color,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+          }))
+        : [
+            {
+              label: datasetLabel,
+              data: toPoints(data),
+              backgroundColor: "rgba(75, 192, 192, 0.6)",
+              pointRadius: 6,
+              pointHoverRadius: 8,
+            },
+          ];
 
     if (query) {
       datasets.push({
@@ -119,7 +135,7 @@ const LowVectorVisualization: FC<LowVectorVisualizationProps> = ({
     }
 
     return { datasets };
-  }, [data, query, datasetLabel, queryLabel]);
+  }, [data, groups, query, datasetLabel, queryLabel]);
 
   const options: ChartOptions<"scatter"> & {
     plugins: {
@@ -147,8 +163,6 @@ const LowVectorVisualization: FC<LowVectorVisualizationProps> = ({
             if (point.title) {
               lines.push(point.title);
             }
-
-            lines.push(`(x: ${context.parsed.x}, y: ${context.parsed.y})`);
 
             if (point.details?.length) {
               lines.push(...point.details);

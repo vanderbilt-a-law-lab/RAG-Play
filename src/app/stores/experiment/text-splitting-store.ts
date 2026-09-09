@@ -3,7 +3,10 @@ import {
   SplitStrategy,
   EnhancedTextBlock,
 } from "@/app/experiment/types/text-splitting";
-import { TEXT_SPLITTING_SAMPLE } from "@/app/experiment/constants/sample-texts";
+import { CORPUS_TEXT } from "@/app/experiment/constants/legal-corpus";
+
+export const DEFAULT_MIN_CHUNK_SIZE = 60;
+
 interface TextSplittingState {
   text: string;
   blocks: EnhancedTextBlock[];
@@ -11,33 +14,41 @@ interface TextSplittingState {
   parentChunkSize: number;
   chunkSize: number;
   overlap: number;
+  /** Chunks shorter than this are merged into the previous chunk. */
+  minChunkSize: number;
   textareaRef: React.RefObject<HTMLTextAreaElement> | null;
   hoveredChunkIndex: number | null;
   setText: (text: string) => void;
+  resetText: () => void;
   setBlocks: (blocks: EnhancedTextBlock[]) => void;
   setStrategy: (strategy: SplitStrategy) => void;
   setParentChunkSize: (parentChunkSize: number) => void;
   setChunkSize: (size: number) => void;
   setOverlap: (overlap: number) => void;
+  setMinChunkSize: (minChunkSize: number) => void;
   setTextareaRef: (textareaRef: React.RefObject<HTMLTextAreaElement> | null) => void;
   setHoveredChunkIndex: (hoveredChunkIndex: number | null) => void;
 }
 
 export const useTextSplittingStore = create<TextSplittingState>((set) => ({
-  text: TEXT_SPLITTING_SAMPLE,
+  text: CORPUS_TEXT,
   blocks: [],
   strategy: "recursive-character",
   parentChunkSize: 1024,
   chunkSize: 500,
   overlap: 50,
+  minChunkSize: DEFAULT_MIN_CHUNK_SIZE,
   textareaRef: null,
   hoveredChunkIndex: null,
   setText: (text) => set({ text }),
+  resetText: () => set({ text: CORPUS_TEXT }),
   setBlocks: (blocks) => set({ blocks }),
   setStrategy: (strategy) => set({ strategy }),
   setParentChunkSize: (parentChunkSize) => set({ parentChunkSize }),
   setChunkSize: (chunkSize) => set({ chunkSize }),
   setOverlap: (overlap) => set({ overlap }),
+  setMinChunkSize: (minChunkSize) =>
+    set({ minChunkSize: Math.max(0, Math.floor(minChunkSize) || 0) }),
   setTextareaRef: (textareaRef) => set({ textareaRef }),
   setHoveredChunkIndex: (hoveredChunkIndex) => set({ hoveredChunkIndex }),
 }));

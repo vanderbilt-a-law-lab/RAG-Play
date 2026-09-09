@@ -17,6 +17,8 @@ import { ModelSelector } from "./embedding/ModelSelector";
 import { LoadingPanel } from "./embedding/LoadingPanel";
 import { EMBEDDING_CONSTANTS } from "@/app/hooks";
 import { embedTo2D } from "@/lib/utils";
+import type { EmbeddingModel } from "@/app/experiment/types/embedding";
+import { groupPointsBySource } from "@/app/experiment/utils/source-groups";
 
 interface EmbeddingTabProps {
   embeddingWorker: UseEmbeddingWorkerReturn;
@@ -49,15 +51,26 @@ export function EmbeddingTab({ embeddingWorker }: EmbeddingTabProps) {
         (point, index) => ({
           ...point,
           title: `Chunk ${index + 1}`,
+          details: blocks[index]
+            ? [
+                blocks[index].source?.shortTitle ?? "Source unknown",
+                blocks[index].text.replace(/\s+/g, " ").slice(0, 80),
+              ]
+            : undefined,
         })
       );
     } catch {
       return [];
     }
-  }, [blocksEmbedding]);
+  }, [blocksEmbedding, blocks]);
+
+  const sourceGroups = useMemo(
+    () => groupPointsBySource(embedding2d, blocks),
+    [embedding2d, blocks]
+  );
 
   const handleModelChange = (newModel: string) => {
-    setModel(newModel as "Snowflake/snowflake-arctic-embed-xs");
+    setModel(newModel as EmbeddingModel);
   };
 
   return (
@@ -65,22 +78,22 @@ export function EmbeddingTab({ embeddingWorker }: EmbeddingTabProps) {
       <CardHeader>
         <CardTitle>Vector Embedding</CardTitle>
         <CardDescription>
-          View knowledge-base chunks and their vector embeddings side by side
-          before any query-time retrieval happens.
+          Each chunk is turned into a list of numbers. Chunks that mean
+          similar things get similar numbers. This is the index the search
+          runs over; nothing here depends on your question yet.
         </CardDescription>
         <blockquote className="space-y-2 border-l-4 border-muted-foreground/25 px-4 py-2 text-xs text-muted-foreground">
           <p>
-            Words that are semantically similar are often represented by vectors
-            that are close to each other in this vector space. This allows for
-            mathematical operations like addition and subtraction to carry
-            semantic meaning.
+            The list of numbers is called an embedding, or a vector. Text with
+            similar meaning gets numbers that are close together, so
+            &quot;sanction&quot; lands nearer to &quot;penalty&quot; than to
+            &quot;sandwich.&quot; The classic example: the numbers for
+            &quot;king&quot; minus &quot;man&quot; plus &quot;woman&quot; come
+            out close to the numbers for &quot;queen.&quot;
           </p>
           <p>
-            For example, the vector representation of &quot;king&quot; minus
-            &quot;man&quot; plus &quot;woman&quot; should be close to the vector
-            representation of &quot;queen.&quot; In other words, vector
-            embeddings are a numerical representation of a particular data
-            object.
+            The model runs in your browser. Nothing is sent anywhere at this
+            step.
           </p>
         </blockquote>
       </CardHeader>
@@ -100,6 +113,7 @@ export function EmbeddingTab({ embeddingWorker }: EmbeddingTabProps) {
             <div className="w-1/2">
               <LowVectorVisualization
                 data={embedding2d}
+                groups={sourceGroups}
                 title="Chunk Embedding Space"
                 datasetLabel="Chunks"
                 className="h-[400px]"
@@ -108,28 +122,30 @@ export function EmbeddingTab({ embeddingWorker }: EmbeddingTabProps) {
 
             <div className="w-1/2 text-sm text-muted-foreground space-y-2 rounded-lg border border-border bg-muted/50 p-4">
               <p>
-                This visualization uses UMAP (Uniform Manifold Approximation and
-                Projection) to reduce the high-dimensional embedding vectors
-                (typically 384 or 768 dimensions) into 2D space for
-                visualization purposes.
+                Each chunk is 384 numbers. This map squeezes them down to two
+                so they can be drawn, using a method called UMAP.
               </p>
               <p>
-                <strong>Important notes:</strong>
+                <strong>Keep in mind:</strong>
               </p>
               <ul className="list-disc list-inside space-y-1">
                 <li>
-                  The visualization is approximate - distances between points in
-                  2D may not exactly match the actual cosine similarities
-                  between the original high-dimensional vectors.
+                  The map is approximate. Two points that look close here can
+                  still score far apart in the search.
                 </li>
                 <li>
-                  UMAP results can vary between runs due to its stochastic
-                  nature. The same embeddings may appear in different
-                  arrangements each time the visualization is generated.
+                  The layout changes a little each time it is drawn. Look at
+                  which points cluster, not at exact positions.
                 </li>
                 <li>
                   This view only plots document chunks, so it represents the
                   indexed knowledge base before a user query is embedded.
+                </li>
+                <li>
+                  Points are colored by source document. Chunks from the same
+                  document tend to sit together, which is one reason a search
+                  can pull several passages from one source and none from
+                  another.
                 </li>
               </ul>
             </div>
@@ -175,7 +191,7 @@ export function EmbeddingTab({ embeddingWorker }: EmbeddingTabProps) {
 
           <div className="space-y-2">
             <label className="text-sm font-medium">
-              Chunks Embedding Vectors:
+              Each chunk as a list of numbers:
             </label>
             <div
               className="rounded-lg border-2 border-dashed border-muted-foreground/25"
@@ -204,7 +220,7 @@ export function EmbeddingTab({ embeddingWorker }: EmbeddingTabProps) {
                           </p>
                           <p className="text-xs text-muted-foreground">
                             Chunk {blockIndex + 1} • {blockEmbedding[0].length}{" "}
-                            dimensions
+                            numbers (showing the first 8)
                           </p>
                         </div>
                       </div>
@@ -215,7 +231,7 @@ export function EmbeddingTab({ embeddingWorker }: EmbeddingTabProps) {
                     {loadingState.status === "error"
                       ? `Error: ${loadingState.error}`
                       : loadingState.status !== "idle"
-                      ? "Waiting for model to load..."
+                      ? "Waiting for the model to download..."
                       : "No chunks to embed"}
                   </div>
                 )}

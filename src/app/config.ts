@@ -1,26 +1,39 @@
-export type GroqChatModelId =
-  | "gemma2-9b-it"
-  | "gemma-7b-it"
-  | "llama3-groq-70b-8192-tool-use-preview"
-  | "llama3-groq-8b-8192-tool-use-preview"
-  | "llama-3.1-70b-versatile"
-  | "llama-3.1-8b-instant"
-  | "llama-3.2-1b-preview"
-  | "llama-3.2-3b-preview"
-  //   | "llama-3.2-11b-vision-preview"
-  //   | "llama-3.2-90b-vision-preview"
-  | "llama-guard-3-8b"
-  | "llama3-70b-8192"
-  | "llama3-8b-8192"
-  | "mixtral-8x7b-32768"
-  | (string & {});
+/**
+ * Server-side configuration. Values come from environment variables so the
+ * same build can run locally and on Vercel.
+ *
+ * Required:
+ *   ANTHROPIC_API_KEY  - key for the Claude API (read by the Anthropic SDK)
+ * Optional:
+ *   ANTHROPIC_MODEL    - Claude model id; must support adaptive thinking and
+ *                        the effort setting (Claude Opus 5, Sonnet 5, Opus 4.8,
+ *                        Opus 4.7, Opus 4.6, Sonnet 4.6). Default: claude-opus-5
+ *   ACCESS_CODE        - if set, the browser must send this class code before
+ *                        the server will call the model
+ *   GOOGLE_SITE_VERIFICATION_ID
+ */
+export const DEFAULT_ANTHROPIC_MODEL = "claude-opus-5";
 
 export default class AppConfig {
-  static readonly groq = {
-    apiKey: process.env.GROQ_API_KEY!,
-    model: process.env.GROQ_MODEL! as GroqChatModelId,
+  static readonly anthropic = {
+    model: process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_ANTHROPIC_MODEL,
+    /** Hard ceiling on output tokens per request (thinking tokens count). */
+    maxOutputTokens: 4096,
+    /** Ceiling on the system prompt (retrieved passages + instructions). */
+    maxContextChars: 24000,
+    /** Ceiling on the user message. */
+    maxQuestionChars: 2000,
   };
 
+  static readonly accessCode = process.env.ACCESS_CODE?.trim() || "";
+
+  /** Per-connection limits enforced in memory by the generate route. */
+  static readonly rateLimit = {
+    perMinute: 8,
+    perHour: 60,
+  };
+
+  /** Empty strings (an env var created without a value) are treated as unset. */
   static readonly googleSiteVerificationId =
-    process.env.GOOGLE_SITE_VERIFICATION_ID;
+    process.env.GOOGLE_SITE_VERIFICATION_ID?.trim() || undefined;
 }

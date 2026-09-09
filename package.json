@@ -10,7 +10,7 @@
     "prepare": "husky || true"
   },
   "dependencies": {
-    "@ai-sdk/groq": "^1.0.4",
+    "@anthropic-ai/sdk": "0.124.0",
     "@huggingface/transformers": "^3.0.0",
     "@langchain/textsplitters": "^0.1.0",
     "@radix-ui/react-progress": "^1.1.0",
@@ -20,7 +20,6 @@
     "@radix-ui/react-tabs": "^1.1.1",
     "@radix-ui/react-tooltip": "^1.1.4",
     "@vercel/analytics": "^1.4.1",
-    "ai": "^4.0.7",
     "chart.js": "^4.4.7",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
