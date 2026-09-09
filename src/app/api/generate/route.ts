@@ -53,6 +53,16 @@ const describeError = (error: unknown): { code: string; message: string } => {
       message: `Model provider error (${error.status ?? "unknown"}): ${error.message}`,
     };
   }
+  if (
+    error instanceof Error &&
+    error.message.includes("Could not resolve authentication method")
+  ) {
+    return {
+      code: "auth",
+      message:
+        "The server has no Anthropic API key. Set ANTHROPIC_API_KEY in the deployment environment and redeploy.",
+    };
+  }
   if (error instanceof Error) {
     return { code: "server_error", message: error.message };
   }
